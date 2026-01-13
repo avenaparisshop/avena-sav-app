@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paramètres - Avena SAV</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b">
+        <div class="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <a href="/" class="text-gray-600 hover:text-gray-800">
+                    <i class="fas fa-arrow-left"></i>
+                </a>
+                <h1 class="text-xl font-bold text-gray-800">
+                    <i class="fas fa-cog text-pink-500 mr-2"></i>
+                    Paramètres
+                </h1>
+            </div>
+        </div>
+    </header>
+
+    <div class="max-w-4xl mx-auto px-4 py-8">
+        <!-- Test Connections -->
+        <div class="bg-white rounded-lg shadow mb-6">
+            <div class="p-4 border-b">
+                <h2 class="font-semibold text-gray-700">
+                    <i class="fas fa-plug mr-2"></i>Test des connexions
+                </h2>
+            </div>
+            <div class="p-6">
+                <p class="text-sm text-gray-500 mb-4">
+                    Vérifiez que toutes les connexions (Zoho, Shopify, Claude) fonctionnent correctement.
+                </p>
+                <button onclick="testConnections()" id="testBtn" class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg">
+                    <i class="fas fa-vial mr-2"></i>Tester les connexions
+                </button>
+
+                <div id="testResults" class="mt-6 hidden">
+                    <div class="space-y-3">
+                        <div id="zoho-result" class="flex items-center justify-between p-3 rounded-lg bg-gray-50">
+                            <span class="font-medium">Zoho Mail</span>
+                            <span class="status">-</span>
+                        </div>
+                        <div id="shopify-result" class="flex items-center justify-between p-3 rounded-lg bg-gray-50">
+                            <span class="font-medium">Shopify</span>
+                            <span class="status">-</span>
+                        </div>
+                        <div id="claude-result" class="flex items-center justify-between p-3 rounded-lg bg-gray-50">
+                            <span class="font-medium">Claude API</span>
+                            <span class="status">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Configuration Guide -->
+        <div class="bg-white rounded-lg shadow mb-6">
+            <div class="p-4 border-b">
+                <h2 class="font-semibold text-gray-700">
+                    <i class="fas fa-book mr-2"></i>Guide de configuration
+                </h2>
+            </div>
+            <div class="p-6">
+                <div class="space-y-6">
+                    <!-- Zoho -->
+                    <div>
+                        <h3 class="font-medium text-gray-800 mb-2">
+                            <i class="fas fa-envelope text-blue-500 mr-2"></i>Zoho Mail
+                        </h3>
+                        <ol class="text-sm text-gray-600 list-decimal list-inside space-y-1 ml-4">
+                            <li>Connectez-vous à <a href="https://mail.zoho.eu" target="_blank" class="text-blue-500">mail.zoho.eu</a></li>
+                            <li>Allez dans Paramètres → Mail Accounts</li>
+                            <li>Activez IMAP Access</li>
+                            <li>Créez un mot de passe d'application si 2FA activé</li>
+                            <li>Copiez vos identifiants dans le fichier .env</li>
+                        </ol>
+                    </div>
+
+                    <!-- Shopify -->
+                    <div>
+                        <h3 class="font-medium text-gray-800 mb-2">
+                            <i class="fab fa-shopify text-green-500 mr-2"></i>Shopify
+                        </h3>
+                        <ol class="text-sm text-gray-600 list-decimal list-inside space-y-1 ml-4">
+                            <li>Allez dans Admin Shopify → Paramètres → Apps</li>
+                            <li>Cliquez sur "Développer des apps"</li>
+                            <li>Créez une nouvelle app</li>
+                            <li>Accordez les permissions : <code class="bg-gray-100 px-1 rounded">read_orders</code>, <code class="bg-gray-100 px-1 rounded">read_customers</code></li>
+                            <li>Installez l'app et copiez l'Access Token</li>
+                        </ol>
+                    </div>
+
+                    <!-- Claude -->
+                    <div>
+                        <h3 class="font-medium text-gray-800 mb-2">
+                            <i class="fas fa-robot text-purple-500 mr-2"></i>Claude API
+                        </h3>
+                        <ol class="text-sm text-gray-600 list-decimal list-inside space-y-1 ml-4">
+                            <li>Créez un compte sur <a href="https://console.anthropic.com" target="_blank" class="text-blue-500">console.anthropic.com</a></li>
+                            <li>Ajoutez des crédits (min $5)</li>
+                            <li>Allez dans API Keys</li>
+                            <li>Créez une nouvelle clé API</li>
+                            <li>Copiez-la dans le fichier .env</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Automation Rules -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="p-4 border-b">
+                <h2 class="font-semibold text-gray-700">
+                    <i class="fas fa-robot mr-2"></i>Règles d'automatisation
+                </h2>
+            </div>
+            <div class="p-6">
+                <p class="text-sm text-gray-500 mb-4">
+                    Ces règles sont configurées dans le fichier <code class="bg-gray-100 px-2 py-1 rounded">.env</code>
+                </p>
+
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                        <div>
+                            <p class="font-medium text-gray-800">Auto-envoi Suivi de commande</p>
+                            <p class="text-sm text-gray-500">Envoie automatiquement si tracking disponible</p>
+                        </div>
+                        <code class="text-sm bg-white px-3 py-1 rounded border">AUTO_SEND_TRACKING=true</code>
+                    </div>
+
+                    <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                        <div>
+                            <p class="font-medium text-gray-800">Auto-envoi Confirmation retour</p>
+                            <p class="text-sm text-gray-500">Envoie automatiquement les confirmations de retour</p>
+                        </div>
+                        <code class="text-sm bg-white px-3 py-1 rounded border">AUTO_SEND_RETURN_CONFIRM=false</code>
+                    </div>
+
+                    <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                        <div>
+                            <p class="font-medium text-gray-800">Intervalle de vérification</p>
+                            <p class="text-sm text-gray-500">Fréquence de vérification des nouveaux emails</p>
+                        </div>
+                        <code class="text-sm bg-white px-3 py-1 rounded border">EMAIL_CHECK_INTERVAL=300</code>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function testConnections() {
+            const btn = document.getElementById('testBtn');
+            const results = document.getElementById('testResults');
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Test en cours...';
+            results.classList.remove('hidden');
+
+            // Reset
+            ['zoho', 'shopify', 'claude'].forEach(service => {
+                document.querySelector(`#${service}-result .status`).innerHTML =
+                    '<i class="fas fa-spinner fa-spin text-gray-400"></i>';
+            });
+
+            try {
+                const res = await fetch('/api/test-connections', { method: 'POST' });
+                const data = await res.json();
+
+                Object.entries(data.results).forEach(([service, result]) => {
+                    const el = document.querySelector(`#${service}-result`);
+                    const statusEl = el.querySelector('.status');
+
+                    if (result.success) {
+                        el.classList.remove('bg-gray-50');
+                        el.classList.add('bg-green-50');
+                        statusEl.innerHTML = `<span class="text-green-600"><i class="fas fa-check-circle mr-1"></i>${result.message}</span>`;
+                    } else {
+                        el.classList.remove('bg-gray-50');
+                        el.classList.add('bg-red-50');
+                        statusEl.innerHTML = `<span class="text-red-600"><i class="fas fa-times-circle mr-1"></i>${result.message}</span>`;
+                    }
+                });
+            } catch (e) {
+                console.error(e);
+            }
+
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-vial mr-2"></i>Tester les connexions';
+        }
+    </script>
+</body>
+</html>

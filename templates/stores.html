@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stores Shopify - Avena SAV</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b">
+        <div class="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <a href="/" class="text-gray-600 hover:text-gray-800">
+                    <i class="fas fa-arrow-left"></i>
+                </a>
+                <h1 class="text-xl font-bold text-gray-800">
+                    <i class="fab fa-shopify text-green-500 mr-2"></i>
+                    Stores Shopify
+                </h1>
+            </div>
+            <a href="/shopify/install" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg">
+                <i class="fas fa-plus mr-2"></i>Connecter un store
+            </a>
+        </div>
+    </header>
+
+    <div class="max-w-4xl mx-auto px-4 py-8">
+        <!-- Liste des stores connectes -->
+        <div class="bg-white rounded-lg shadow mb-6">
+            <div class="p-4 border-b">
+                <h2 class="font-semibold text-gray-700">
+                    <i class="fas fa-store mr-2"></i>Stores connectes ({{ shops|length }})
+                </h2>
+            </div>
+            <div class="p-6">
+                {% if shops %}
+                <div class="space-y-4">
+                    {% for shop_name, shop_data in shops.items() %}
+                    <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg border">
+                        <div class="flex items-center space-x-4">
+                            <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                                <i class="fab fa-shopify text-2xl text-green-600"></i>
+                            </div>
+                            <div>
+                                <h3 class="font-medium text-gray-800">{{ shop_name }}</h3>
+                                {% if shop_data.shop_info %}
+                                <p class="text-sm text-gray-500">{{ shop_data.shop_info.name }}</p>
+                                <p class="text-xs text-gray-400">{{ shop_data.shop_info.domain }}</p>
+                                {% else %}
+                                <p class="text-sm text-gray-500">{{ shop_data.shop_domain }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <span class="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm">
+                                <i class="fas fa-check-circle mr-1"></i>Connecte
+                            </span>
+                            <a href="/shopify/disconnect/{{ shop_name }}"
+                               class="text-red-500 hover:text-red-700 p-2"
+                               onclick="return confirm('Voulez-vous vraiment deconnecter ce store ?')">
+                                <i class="fas fa-unlink"></i>
+                            </a>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center py-12">
+                    <i class="fab fa-shopify text-6xl text-gray-300 mb-4"></i>
+                    <p class="text-gray-500 mb-4">Aucun store Shopify connecte</p>
+                    <a href="/shopify/install" class="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-lg inline-block">
+                        <i class="fas fa-plus mr-2"></i>Connecter votre premier store
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Instructions -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="p-4 border-b">
+                <h2 class="font-semibold text-gray-700">
+                    <i class="fas fa-info-circle mr-2"></i>Comment ca marche
+                </h2>
+            </div>
+            <div class="p-6">
+                <div class="space-y-4 text-sm text-gray-600">
+                    <div class="flex items-start space-x-3">
+                        <span class="w-6 h-6 bg-green-500 text-white rounded-full flex items-center justify-center text-xs font-bold">1</span>
+                        <p>Cliquez sur "Connecter un store" et entrez le nom de votre boutique Shopify</p>
+                    </div>
+                    <div class="flex items-start space-x-3">
+                        <span class="w-6 h-6 bg-green-500 text-white rounded-full flex items-center justify-center text-xs font-bold">2</span>
+                        <p>Autorisez l'application dans votre admin Shopify</p>
+                    </div>
+                    <div class="flex items-start space-x-3">
+                        <span class="w-6 h-6 bg-green-500 text-white rounded-full flex items-center justify-center text-xs font-bold">3</span>
+                        <p>L'application peut maintenant acceder aux commandes et clients de ce store</p>
+                    </div>
+                </div>
+
+                <div class="mt-6 p-4 bg-blue-50 rounded-lg">
+                    <p class="text-sm text-blue-700">
+                        <i class="fas fa-lightbulb mr-2"></i>
+                        <strong>Multi-store:</strong> Vous pouvez connecter plusieurs stores (France, NL, ES, etc.)
+                        L'application recherchera automatiquement les commandes dans tous les stores connectes.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
