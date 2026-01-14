@@ -11,11 +11,11 @@ import logging
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from config import get_config
-from models import db, Email
+from models import db, Email, ShopifyToken
 from modules.email_handler import ZohoEmailHandler, test_zoho_connection
 from modules.shopify_handler import ShopifyHandler, test_shopify_connection
 from modules.ai_responder import AIResponder, test_ai_connection
-from modules.shopify_oauth import ShopifyOAuth, ShopifyTokenStorage, get_oauth_handler, get_token_storage
+from modules.shopify_oauth import ShopifyOAuth, ShopifyTokenStorage, ShopifyTokenStorageDB, get_oauth_handler
 
 # Configuration logging
 logging.basicConfig(
@@ -59,10 +59,11 @@ token_storage = None
 
 
 def get_token_storage_instance():
-    """Lazy loading du storage de tokens"""
+    """Lazy loading du storage de tokens - utilise la base de données pour persistance"""
     global token_storage
     if token_storage is None:
-        token_storage = get_token_storage()
+        # Utilise le stockage en base de données (persistant même après redéploiement)
+        token_storage = ShopifyTokenStorageDB(db, ShopifyToken)
     return token_storage
 
 
@@ -323,8 +324,9 @@ def api_get_shops():
     for shop_name, data in shops.items():
         safe_shops[shop_name] = {
             'shop_domain': data.get('shop_domain'),
-            'shop_info': data.get('shop_info'),
-            'created_at': data.get('created_at')
+            'shop_name': data.get('shop_name'),
+            'shop_email': data.get('shop_email'),
+            'connected_at': data.get('connected_at')
         }
 
     return jsonify({
@@ -427,12 +429,15 @@ def regenerate_response(email_id):
     """Régénère la réponse IA"""
     email_record = Email.query.get_or_404(email_id)
 
-    # Récupère le contexte Shopify
+    # Récupère le contexte Shopify (si connecté)
     shopify = get_shopify_handler()
-    order_context = shopify.get_order_context(
-        order_number=email_record.order_number,
-        email=email_record.sender_email
-    )
+    if shopify:
+        order_context = shopify.get_order_context(
+            order_number=email_record.order_number,
+            email=email_record.sender_email
+        )
+    else:
+        order_context = {'order': None, 'customer': None}
 
     # Régénère la réponse
     ai = get_ai_responder()
@@ -465,7 +470,7 @@ def fetch_new_emails():
         shopify = get_shopify_handler()
         ai = get_ai_responder()
 
-        # Récupère les emails non lus
+        # Récupère les emails (lus et non lus)
         new_emails = handler.fetch_unread_emails()
 
         processed = 0
@@ -483,11 +488,15 @@ def fetch_new_emails():
                 body=email_data['body']
             )
 
-            # Récupère le contexte Shopify
-            order_context = shopify.get_order_context(
-                order_number=email_data.get('order_number'),
-                email=email_data['sender_email']
-            )
+            # Récupère le contexte Shopify (si connecté)
+            order_context = {}
+            if shopify:
+                order_context = shopify.get_order_context(
+                    order_number=email_data.get('order_number'),
+                    email=email_data['sender_email']
+                )
+            else:
+                order_context = {'order': None, 'customer': None}
 
             # Met à jour le numéro de commande si trouvé via Shopify
             if not email_data.get('order_number') and order_context.get('order'):

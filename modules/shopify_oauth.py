@@ -258,6 +258,65 @@ class ShopifyTokenStorage:
             logger.info(f"Token supprimé pour {shop_key}")
 
 
+class ShopifyTokenStorageDB:
+    """Gestionnaire de stockage des tokens Shopify en base de données (persistant)"""
+
+    def __init__(self, db_instance, token_model):
+        """
+        Initialise le storage DB
+
+        Args:
+            db_instance: Instance SQLAlchemy
+            token_model: Modèle ShopifyToken
+        """
+        self.db = db_instance
+        self.TokenModel = token_model
+
+    def store_token(self, shop_domain: str, access_token: str, shop_info: Dict = None):
+        """Stocke un token pour un shop"""
+        shop_key = shop_domain.replace('.myshopify.com', '')
+
+        # Vérifie si existe déjà
+        existing = self.TokenModel.query.filter_by(shop_domain=shop_key).first()
+
+        if existing:
+            existing.access_token = access_token
+            if shop_info:
+                existing.shop_name = shop_info.get('name')
+                existing.shop_email = shop_info.get('email')
+        else:
+            new_token = self.TokenModel(
+                shop_domain=shop_key,
+                access_token=access_token,
+                shop_name=shop_info.get('name') if shop_info else None,
+                shop_email=shop_info.get('email') if shop_info else None
+            )
+            self.db.session.add(new_token)
+
+        self.db.session.commit()
+        logger.info(f"Token stocké en DB pour {shop_key}")
+
+    def get_token(self, shop_domain: str) -> Optional[str]:
+        """Récupère le token pour un shop"""
+        shop_key = shop_domain.replace('.myshopify.com', '')
+        token_record = self.TokenModel.query.filter_by(shop_domain=shop_key).first()
+        return token_record.access_token if token_record else None
+
+    def get_all_shops(self) -> Dict:
+        """Retourne tous les shops connectés"""
+        tokens = self.TokenModel.query.all()
+        return {t.shop_domain: t.to_dict() for t in tokens}
+
+    def remove_token(self, shop_domain: str):
+        """Supprime le token d'un shop"""
+        shop_key = shop_domain.replace('.myshopify.com', '')
+        token_record = self.TokenModel.query.filter_by(shop_domain=shop_key).first()
+        if token_record:
+            self.db.session.delete(token_record)
+            self.db.session.commit()
+            logger.info(f"Token supprimé de la DB pour {shop_key}")
+
+
 def get_oauth_handler() -> ShopifyOAuth:
     """Factory pour créer un handler OAuth avec les variables d'environnement"""
     client_id = os.getenv('SHOPIFY_CLIENT_ID')
@@ -271,6 +330,6 @@ def get_oauth_handler() -> ShopifyOAuth:
 
 
 def get_token_storage() -> ShopifyTokenStorage:
-    """Factory pour le storage de tokens"""
+    """Factory pour le storage de tokens (fichier JSON - legacy)"""
     storage_path = os.getenv('SHOPIFY_TOKENS_FILE', 'shopify_tokens.json')
     return ShopifyTokenStorage(storage_path)

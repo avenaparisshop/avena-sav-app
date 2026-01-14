@@ -45,11 +45,12 @@
                             </div>
                             <div>
                                 <h3 class="font-medium text-gray-800">{{ shop_name }}</h3>
-                                {% if shop_data.shop_info %}
-                                <p class="text-sm text-gray-500">{{ shop_data.shop_info.name }}</p>
-                                <p class="text-xs text-gray-400">{{ shop_data.shop_info.domain }}</p>
-                                {% else %}
-                                <p class="text-sm text-gray-500">{{ shop_data.shop_domain }}</p>
+                                {% if shop_data.shop_name %}
+                                <p class="text-sm text-gray-500">{{ shop_data.shop_name }}</p>
+                                {% endif %}
+                                <p class="text-xs text-gray-400">{{ shop_data.shop_domain or shop_name }}.myshopify.com</p>
+                                {% if shop_data.connected_at %}
+                                <p class="text-xs text-gray-400">Connecté le {{ shop_data.connected_at[:10] }}</p>
                                 {% endif %}
                             </div>
                         </div>

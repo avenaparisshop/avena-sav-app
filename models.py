@@ -88,3 +88,26 @@ class Settings(db.Model):
     description = db.Column(db.String(255))
 
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ShopifyToken(db.Model):
+    """Tokens Shopify stockés en base de données (persistant)"""
+    __tablename__ = 'shopify_tokens'
+
+    id = db.Column(db.Integer, primary_key=True)
+    shop_domain = db.Column(db.String(255), unique=True, nullable=False)
+    access_token = db.Column(db.String(255), nullable=False)
+    shop_name = db.Column(db.String(255))
+    shop_email = db.Column(db.String(255))
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'shop_domain': self.shop_domain,
+            'access_token': self.access_token,
+            'shop_name': self.shop_name,
+            'shop_email': self.shop_email,
+            'connected_at': self.created_at.isoformat() if self.created_at else None
+        }
