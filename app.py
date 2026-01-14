@@ -204,7 +204,7 @@ def shopify_install():
         }), 500
 
     try:
-        get_oauth_handler_for_shop(shop)
+        oauth = get_oauth_handler_for_shop(shop)
 
         # Génère une clé state pour la sécurité CSRF
         import secrets
