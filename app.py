@@ -15,7 +15,7 @@ from models import db, Email, ShopifyToken
 from modules.email_handler import ZohoEmailHandler, test_zoho_connection
 from modules.shopify_handler import ShopifyHandler, test_shopify_connection
 from modules.ai_responder import AIResponder, test_ai_connection
-from modules.shopify_oauth import ShopifyOAuth, ShopifyTokenStorage, ShopifyTokenStorageDB, get_oauth_handler, get_oauth_handler_for_shop
+from modules.shopify_oauth import ShopifyOAuth, ShopifyTokenStorage, ShopifyTokenStorageDB, get_oauth_handler, get_oauth_handler_for_shop, get_permanent_access_token
 
 # Configuration logging
 logging.basicConfig(
@@ -110,11 +110,15 @@ def get_shopify_handler(shop_name: str = None):
     if shop_name in shopify_handlers:
         return shopify_handlers[shop_name]
 
-    # Récupère le token
-    storage = get_token_storage_instance()
-    access_token = storage.get_token(shop_name)
+    # 1. D'abord essaie les tokens permanents configurés dans SHOPIFY_CREDENTIALS
+    access_token = get_permanent_access_token(shop_name)
 
-    # Si pas de token OAuth, essaie le token legacy
+    # 2. Si pas de token permanent, essaie le storage DB/fichier (OAuth)
+    if not access_token:
+        storage = get_token_storage_instance()
+        access_token = storage.get_token(shop_name)
+
+    # 3. Si pas de token OAuth, essaie le token legacy
     if not access_token and shop_name == app.config.get('SHOPIFY_SHOP_NAME'):
         access_token = app.config.get('SHOPIFY_ACCESS_TOKEN')
 
@@ -176,8 +180,27 @@ def settings():
 @app.route('/stores')
 def stores():
     """Page de gestion des stores Shopify connectés"""
+    import json
+
+    # Récupère les shops connectés via OAuth (DB)
     storage = get_token_storage_instance()
     connected_shops = storage.get_all_shops()
+
+    # Ajoute aussi les shops avec access_token permanent dans SHOPIFY_CREDENTIALS
+    credentials_json = os.environ.get('SHOPIFY_CREDENTIALS', '{}')
+    try:
+        credentials = json.loads(credentials_json)
+        for shop_key, creds in credentials.items():
+            if creds.get('access_token') and shop_key not in connected_shops:
+                connected_shops[shop_key] = {
+                    'shop_domain': f"{shop_key}.myshopify.com",
+                    'shop_name': shop_key,
+                    'connected_at': 'Permanent Token',
+                    'permanent': True
+                }
+    except json.JSONDecodeError:
+        pass
+
     return render_template('stores.html', shops=connected_shops)
 
 

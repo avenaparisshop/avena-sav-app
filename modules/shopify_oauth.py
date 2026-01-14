@@ -371,6 +371,36 @@ def get_oauth_handler_for_shop(shop_domain: str) -> ShopifyOAuth:
     return get_oauth_handler()
 
 
+def get_permanent_access_token(shop_domain: str) -> Optional[str]:
+    """
+    Récupère un access_token permanent depuis SHOPIFY_CREDENTIALS si disponible.
+
+    Cela permet de configurer des access tokens générés directement dans
+    le Shopify Admin (Custom Apps) sans passer par OAuth.
+
+    Args:
+        shop_domain: Domaine du shop (ex: tgir1c-x2 ou tgir1c-x2.myshopify.com)
+
+    Returns:
+        Access token permanent ou None si non configuré
+    """
+    shop_key = shop_domain.replace('.myshopify.com', '')
+
+    credentials_json = os.getenv('SHOPIFY_CREDENTIALS', '{}')
+    try:
+        credentials = json.loads(credentials_json)
+    except json.JSONDecodeError:
+        return None
+
+    if shop_key in credentials:
+        access_token = credentials[shop_key].get('access_token')
+        if access_token:
+            logger.info(f"Access token permanent trouvé pour {shop_key}")
+            return access_token
+
+    return None
+
+
 def get_token_storage() -> ShopifyTokenStorage:
     """Factory pour le storage de tokens (fichier JSON - legacy)"""
     storage_path = os.getenv('SHOPIFY_TOKENS_FILE', 'shopify_tokens.json')
