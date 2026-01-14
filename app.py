@@ -8,6 +8,7 @@ from datetime import datetime
 import threading
 import time
 import logging
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from config import get_config
 from models import db, Email
@@ -31,6 +32,13 @@ def create_app():
     # Chargement config
     config = get_config()
     app.config.from_object(config)
+
+    # Support pour les proxys (Railway, Heroku, etc.)
+    # Permet à Flask de détecter correctement HTTPS derrière un reverse proxy
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+
+    # Force HTTPS pour les URLs générées (important pour OAuth)
+    app.config['PREFERRED_URL_SCHEME'] = 'https'
 
     # Init database
     db.init_app(app)
