@@ -318,7 +318,7 @@ class ShopifyTokenStorageDB:
 
 
 def get_oauth_handler() -> ShopifyOAuth:
-    """Factory pour créer un handler OAuth avec les variables d'environnement"""
+    """Factory pour créer un handler OAuth avec les variables d'environnement (credentials par défaut)"""
     client_id = os.getenv('SHOPIFY_CLIENT_ID')
     client_secret = os.getenv('SHOPIFY_CLIENT_SECRET')
     scopes = os.getenv('SHOPIFY_SCOPES', 'read_orders,read_customers')
@@ -326,49 +326,49 @@ def get_oauth_handler() -> ShopifyOAuth:
     if not client_id or not client_secret:
         raise ValueError("SHOPIFY_CLIENT_ID et SHOPIFY_CLIENT_SECRET doivent être définis")
 
+    return ShopifyOAuth(client_id, client_secret, scopes)
 
 
-    def get_oauth_handler_for_shop(shop_domain: str) -> ShopifyOAuth:
-            """
-                Factory pour creer un handler OAuth avec les credentials specifiques a une boutique.
+def get_oauth_handler_for_shop(shop_domain: str) -> ShopifyOAuth:
+    """
+    Factory pour créer un handler OAuth avec les credentials spécifiques à une boutique.
 
-                    Cherche d'abord dans SHOPIFY_CREDENTIALS (JSON multi-boutiques),
-                        puis fallback sur SHOPIFY_CLIENT_ID/SECRET par defaut.
+    Cherche d'abord dans SHOPIFY_CREDENTIALS (JSON multi-boutiques),
+    puis fallback sur SHOPIFY_CLIENT_ID/SECRET par défaut.
 
-                            Args:
-                                    shop_domain: Domaine du shop (ex: tgir1c-x2 ou tgir1c-x2.myshopify.com)
+    Args:
+        shop_domain: Domaine du shop (ex: tgir1c-x2 ou tgir1c-x2.myshopify.com)
 
-                                        Returns:
-                                                ShopifyOAuth configure avec les bons credentials
-                                                    """
-            # Normalise le nom du shop (enleve .myshopify.com)
-        shop_key = shop_domain.replace('.myshopify.com', '')
+    Returns:
+        ShopifyOAuth configuré avec les bons credentials
+    """
+    # Normalise le nom du shop (enlève .myshopify.com)
+    shop_key = shop_domain.replace('.myshopify.com', '')
 
     scopes = os.getenv('SHOPIFY_SCOPES', 'read_orders,read_customers')
 
-    # Essaie de recuperer les credentials specifiques au shop
+    # Essaie de récupérer les credentials spécifiques au shop
     credentials_json = os.getenv('SHOPIFY_CREDENTIALS', '{}')
     try:
-                credentials = json.loads(credentials_json)
-except json.JSONDecodeError:
-        logger.warning("SHOPIFY_CREDENTIALS n'est pas un JSON valide, utilisation des credentials par defaut")
+        credentials = json.loads(credentials_json)
+    except json.JSONDecodeError:
+        logger.warning("SHOPIFY_CREDENTIALS n'est pas un JSON valide, utilisation des credentials par défaut")
         credentials = {}
 
     if shop_key in credentials:
-                shop_creds = credentials[shop_key]
-                client_id = shop_creds.get('client_id')
-                client_secret = shop_creds.get('client_secret')
+        shop_creds = credentials[shop_key]
+        client_id = shop_creds.get('client_id')
+        client_secret = shop_creds.get('client_secret')
 
         if client_id and client_secret:
-                        logger.info(f"Utilisation des credentials specifiques pour {shop_key}")
-                        return ShopifyOAuth(client_id, client_secret, scopes)
+            logger.info(f"Utilisation des credentials spécifiques pour {shop_key}")
+            return ShopifyOAuth(client_id, client_secret, scopes)
         else:
-                        logger.warning(f"Credentials incomplets pour {shop_key}, utilisation des credentials par defaut")
+            logger.warning(f"Credentials incomplets pour {shop_key}, utilisation des credentials par défaut")
 
-    # Fallback sur les credentials par defaut
-    logger.info(f"Utilisation des credentials par defaut pour {shop_key}")
+    # Fallback sur les credentials par défaut
+    logger.info(f"Utilisation des credentials par défaut pour {shop_key}")
     return get_oauth_handler()
-    return ShopifyOAuth(client_id, client_secret, scopes)
 
 
 def get_token_storage() -> ShopifyTokenStorage:
