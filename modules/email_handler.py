@@ -140,7 +140,7 @@ class ZohoEmailHandler:
             self.imap_connection.select(folder)
 
             # Recherche des emails non lus
-            status, messages = self.imap_connection.search(None, 'UNSEEN')
+            status, messages = self.imap_connection.search(None, 'ALL')
 
             if status != 'OK':
                 logger.error("Erreur lors de la recherche des emails")
