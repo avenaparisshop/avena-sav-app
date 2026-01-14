@@ -25,6 +25,11 @@ class Config:
     SHOPIFY_CLIENT_ID = os.getenv('SHOPIFY_CLIENT_ID')
     SHOPIFY_CLIENT_SECRET = os.getenv('SHOPIFY_CLIENT_SECRET')
     SHOPIFY_SCOPES = os.getenv('SHOPIFY_SCOPES', 'read_orders,read_customers')
+
+        # Multi-boutiques: credentials par shop (JSON)
+        # Format: {"shop-name": {"client_id": "...", "client_secret": "..."}, ...}
+        # Exemple: {"tgir1c-x2": {"client_id": "abc", "client_secret": "xyz"}}
+        SHOPIFY_CREDENTIALS = os.getenv('SHOPIFY_CREDENTIALS', '{}')
     SHOPIFY_TOKENS_FILE = os.getenv('SHOPIFY_TOKENS_FILE', 'shopify_tokens.json')
 
     # Shop par défaut (optionnel - pour rétrocompatibilité)
