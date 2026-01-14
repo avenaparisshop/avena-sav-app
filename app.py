@@ -236,7 +236,7 @@ def shopify_install():
 
 
 @app.route('/shopify/callback')
-def shopify_callback():
+():
     """
     Callback OAuth après autorisation Shopify
     Reçoit le code d'autorisation et l'échange contre un access token
@@ -259,7 +259,7 @@ def shopify_callback():
                                error="State invalide - possible attaque CSRF")
 
     try:
-        get_oauth_handler_for_shop(shop)
+        oauth = get_oauth_handler_for_shop(shop)
 
         # Échange le code contre un token
         access_token, error = oauth.exchange_code_for_token(shop, code)
