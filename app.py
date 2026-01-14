@@ -204,6 +204,7 @@ def shopify_install():
         }), 500
 
     try:
+        # Utilise les credentials spécifiques au shop si disponibles
         oauth = get_oauth_handler_for_shop(shop)
 
         # Génère une clé state pour la sécurité CSRF
@@ -259,6 +260,7 @@ def shopify_callback():
                                error="State invalide - possible attaque CSRF")
 
     try:
+        # Utilise les credentials spécifiques au shop si disponibles
         oauth = get_oauth_handler_for_shop(shop)
 
         # Échange le code contre un token
