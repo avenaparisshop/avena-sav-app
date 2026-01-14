@@ -1,4 +1,4 @@
-"""
+""
 Application principale Flask - Avena SAV
 Dashboard de gestion des emails SAV avec IA
 """
@@ -15,7 +15,7 @@ from models import db, Email, ShopifyToken
 from modules.email_handler import ZohoEmailHandler, test_zoho_connection
 from modules.shopify_handler import ShopifyHandler, test_shopify_connection
 from modules.ai_responder import AIResponder, test_ai_connection
-from modules.shopify_oauth import ShopifyOAuth, ShopifyTokenStorage, ShopifyTokenStorageDB, get_oauth_handler
+from modules.shopify_oauth import ShopifyOAuth, ShopifyTokenStorage, ShopifyTokenStorageDB, get_oauth_handler, get_oauth_handler_for_shop
 
 # Configuration logging
 logging.basicConfig(
