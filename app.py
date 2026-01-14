@@ -236,7 +236,7 @@ def shopify_install():
 
 
 @app.route('/shopify/callback')
-():
+def shopify_callback():
     """
     Callback OAuth après autorisation Shopify
     Reçoit le code d'autorisation et l'échange contre un access token
