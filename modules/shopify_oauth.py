@@ -326,6 +326,48 @@ def get_oauth_handler() -> ShopifyOAuth:
     if not client_id or not client_secret:
         raise ValueError("SHOPIFY_CLIENT_ID et SHOPIFY_CLIENT_SECRET doivent être définis")
 
+
+
+    def get_oauth_handler_for_shop(shop_domain: str) -> ShopifyOAuth:
+            """
+                Factory pour creer un handler OAuth avec les credentials specifiques a une boutique.
+
+                    Cherche d'abord dans SHOPIFY_CREDENTIALS (JSON multi-boutiques),
+                        puis fallback sur SHOPIFY_CLIENT_ID/SECRET par defaut.
+
+                            Args:
+                                    shop_domain: Domaine du shop (ex: tgir1c-x2 ou tgir1c-x2.myshopify.com)
+
+                                        Returns:
+                                                ShopifyOAuth configure avec les bons credentials
+                                                    """
+            # Normalise le nom du shop (enleve .myshopify.com)
+        shop_key = shop_domain.replace('.myshopify.com', '')
+
+    scopes = os.getenv('SHOPIFY_SCOPES', 'read_orders,read_customers')
+
+    # Essaie de recuperer les credentials specifiques au shop
+    credentials_json = os.getenv('SHOPIFY_CREDENTIALS', '{}')
+    try:
+                credentials = json.loads(credentials_json)
+except json.JSONDecodeError:
+        logger.warning("SHOPIFY_CREDENTIALS n'est pas un JSON valide, utilisation des credentials par defaut")
+        credentials = {}
+
+    if shop_key in credentials:
+                shop_creds = credentials[shop_key]
+                client_id = shop_creds.get('client_id')
+                client_secret = shop_creds.get('client_secret')
+
+        if client_id and client_secret:
+                        logger.info(f"Utilisation des credentials specifiques pour {shop_key}")
+                        return ShopifyOAuth(client_id, client_secret, scopes)
+        else:
+                        logger.warning(f"Credentials incomplets pour {shop_key}, utilisation des credentials par defaut")
+
+    # Fallback sur les credentials par defaut
+    logger.info(f"Utilisation des credentials par defaut pour {shop_key}")
+    return get_oauth_handler()
     return ShopifyOAuth(client_id, client_secret, scopes)
 
 
