@@ -129,7 +129,7 @@ class ZohoEmailHandler:
         return {'name': '', 'email': from_decoded}
 
     def fetch_unread_emails(self, folder: str = "INBOX", limit: int = 50) -> List[Dict]:
-        """Récupère les emails non lus"""
+        """Récupère tous les emails (lus et non lus)"""
         emails = []
 
         if not self.imap_connection:
@@ -139,7 +139,11 @@ class ZohoEmailHandler:
         try:
             self.imap_connection.select(folder)
 
-            # Recherche des emails non lus
+            # Récupère d'abord la liste des emails non lus pour savoir lesquels sont lus/non lus
+            status, unseen_messages = self.imap_connection.search(None, 'UNSEEN')
+            unseen_ids = set(unseen_messages[0].split()) if status == 'OK' and unseen_messages[0] else set()
+
+            # Recherche de TOUS les emails (pas seulement non lus)
             status, messages = self.imap_connection.search(None, 'ALL')
 
             if status != 'OK':
@@ -148,8 +152,10 @@ class ZohoEmailHandler:
 
             email_ids = messages[0].split()
 
-            # Limite le nombre d'emails à traiter
+            # Prend les emails les plus récents (les derniers)
             email_ids = email_ids[-limit:] if len(email_ids) > limit else email_ids
+            # Inverse pour avoir les plus récents en premier
+            email_ids = list(reversed(email_ids))
 
             for email_id in email_ids:
                 try:
@@ -178,6 +184,9 @@ class ZohoEmailHandler:
                     # Cherche un numéro de commande dans le sujet ou le corps
                     order_number = self._extract_order_number(subject + ' ' + body)
 
+                    # Vérifie si l'email est lu ou non
+                    is_read = email_id not in unseen_ids
+
                     emails.append({
                         'message_id': message_id,
                         'sender_email': sender_info['email'],
@@ -186,14 +195,15 @@ class ZohoEmailHandler:
                         'body': body,
                         'received_at': received_at,
                         'order_number': order_number,
-                        'imap_id': email_id.decode() if isinstance(email_id, bytes) else email_id
+                        'imap_id': email_id.decode() if isinstance(email_id, bytes) else email_id,
+                        'is_read': is_read
                     })
 
                 except Exception as e:
                     logger.error(f"Erreur parsing email {email_id}: {e}")
                     continue
 
-            logger.info(f"Récupéré {len(emails)} emails non lus")
+            logger.info(f"Récupéré {len(emails)} emails (lus et non lus)")
             return emails
 
         except Exception as e:
@@ -272,15 +282,19 @@ def test_zoho_connection(email_address: str, password: str,
 
     try:
         if handler.connect_imap():
-            # Compte les emails non lus
             handler.imap_connection.select('INBOX')
-            status, messages = handler.imap_connection.search(None, 'UNSEEN')
 
-            if status == 'OK':
-                email_count = len(messages[0].split()) if messages[0] else 0
+            # Compte TOUS les emails
+            status_all, messages_all = handler.imap_connection.search(None, 'ALL')
+            # Compte les emails non lus
+            status_unseen, messages_unseen = handler.imap_connection.search(None, 'UNSEEN')
+
+            if status_all == 'OK':
+                total_count = len(messages_all[0].split()) if messages_all[0] else 0
+                unseen_count = len(messages_unseen[0].split()) if status_unseen == 'OK' and messages_unseen[0] else 0
                 result['success'] = True
-                result['message'] = f"Connexion réussie ! {email_count} emails non lus."
-                result['email_count'] = email_count
+                result['message'] = f"Connexion réussie ! {total_count} emails ({unseen_count} non lus)."
+                result['email_count'] = total_count
             else:
                 result['message'] = "Connexion OK mais erreur lecture INBOX"
 
