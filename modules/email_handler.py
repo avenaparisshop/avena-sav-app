@@ -205,8 +205,13 @@ class ZohoEmailHandler:
 
         return folders
 
-    def fetch_emails_from_folders(self, folders: List[str] = None, limit: int = None) -> List[Dict]:
-        """Récupère les emails de plusieurs dossiers"""
+    def fetch_emails_from_folders(self, folders: List[str] = None, limit_per_folder: int = 500) -> List[Dict]:
+        """Récupère les emails de plusieurs dossiers
+
+        Args:
+            folders: Liste des dossiers à parcourir
+            limit_per_folder: Limite par dossier (défaut 500 pour éviter timeout)
+        """
         if folders is None:
             # Dossiers par défaut - inclut variantes FR/EN
             folders = ["INBOX", "Archive", "Archiver", "Newsletter", "Notification"]
@@ -222,7 +227,13 @@ class ZohoEmailHandler:
                 continue
 
             try:
-                folder_emails = self.fetch_unread_emails(folder=folder, limit=limit)
+                # Reconnexion avant chaque dossier pour éviter timeout
+                self.disconnect_imap()
+                if not self.connect_imap():
+                    logger.error(f"Impossible de se reconnecter pour {folder}")
+                    continue
+
+                folder_emails = self.fetch_unread_emails(folder=folder, limit=limit_per_folder)
                 if folder_emails:
                     processed_folders.add(folder_lower)
                     for email_data in folder_emails:

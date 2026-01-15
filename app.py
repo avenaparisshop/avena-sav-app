@@ -496,9 +496,10 @@ def fetch_new_emails():
 
         # Récupère les emails de TOUS les dossiers importants
         # INBOX, Archive, Newsletter, Notification (pas Spam/Courrier indésirable)
+        # Limite à 500 emails par dossier pour éviter les timeouts IMAP
         new_emails = handler.fetch_emails_from_folders(
             folders=["INBOX", "Archive", "Archiver", "Newsletter", "Notification"],
-            limit=None
+            limit_per_folder=500
         )
 
         processed = 0
