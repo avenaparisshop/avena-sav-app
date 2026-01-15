@@ -95,28 +95,33 @@
     <div class="flex" style="height: calc(100vh - 110px);">
         <!-- Email List Panel -->
         <div id="emailListPanel" class="email-list-panel bg-white border-r flex flex-col" style="width: 400px;">
-            <div class="p-3 border-b flex items-center justify-between bg-gray-50">
-                <h2 class="font-semibold text-gray-700 text-sm">
-                    <i class="fas fa-inbox mr-2"></i>Emails
-                </h2>
-                <div class="flex space-x-2">
-                    <select id="statusFilter" onchange="loadEmails()" class="border rounded px-2 py-1 text-xs">
-                        <option value="pending">En attente</option>
-                        <option value="sent">Envoyés</option>
-                        <option value="ignored">Ignorés</option>
-                        <option value="all">Tous</option>
-                    </select>
-                    <select id="categoryFilter" onchange="filterByCategory()" class="border rounded px-2 py-1 text-xs">
-                        <option value="all">Toutes catég.</option>
-                        <option value="auto">🤖 AUTO</option>
-                        <option value="manual">👤 MANUAL</option>
-                        <option value="SUIVI">📦 Suivi</option>
-                        <option value="QUESTION_PRODUIT">❓ Produit</option>
-                        <option value="LIVRAISON">🚚 Livraison</option>
-                        <option value="RETOUR">↩️ Retour</option>
-                        <option value="PROBLEME">⚠️ Problème</option>
-                        <option value="SPAM">🚫 Spam</option>
-                    </select>
+            <!-- 3 Boutons principaux de catégorie -->
+            <div class="p-2 border-b bg-gray-50">
+                <div class="flex space-x-1">
+                    <button onclick="setMainFilter('ATTENTE')" id="filterATTENTE"
+                            class="filter-btn flex-1 py-2 px-2 rounded-lg text-xs font-medium transition-all bg-orange-500 text-white">
+                        <i class="fas fa-clock mr-1"></i>Attente réponse
+                        <span id="countATTENTE" class="ml-1 bg-white bg-opacity-30 px-1.5 py-0.5 rounded-full text-xs">-</span>
+                    </button>
+                    <button onclick="setMainFilter('AUTO')" id="filterAUTO"
+                            class="filter-btn flex-1 py-2 px-2 rounded-lg text-xs font-medium transition-all bg-gray-200 text-gray-700 hover:bg-gray-300">
+                        <i class="fas fa-robot mr-1"></i>Réponse auto
+                        <span id="countAUTO" class="ml-1 bg-gray-300 px-1.5 py-0.5 rounded-full text-xs">-</span>
+                    </button>
+                    <button onclick="setMainFilter('SPAM')" id="filterSPAM"
+                            class="filter-btn flex-1 py-2 px-2 rounded-lg text-xs font-medium transition-all bg-gray-200 text-gray-700 hover:bg-gray-300">
+                        <i class="fas fa-ban mr-1"></i>Spam
+                        <span id="countSPAM" class="ml-1 bg-gray-300 px-1.5 py-0.5 rounded-full text-xs">-</span>
+                    </button>
+                </div>
+            </div>
+            <!-- Filtre secondaire (statut) -->
+            <div class="p-2 border-b flex items-center justify-between bg-white">
+                <div class="flex space-x-1">
+                    <button onclick="setStatusFilter('pending')" id="statusPending" class="status-btn text-xs px-3 py-1 rounded bg-yellow-100 text-yellow-700 font-medium">En attente</button>
+                    <button onclick="setStatusFilter('sent')" id="statusSent" class="status-btn text-xs px-3 py-1 rounded bg-gray-100 text-gray-600">Envoyés</button>
+                    <button onclick="setStatusFilter('ignored')" id="statusIgnored" class="status-btn text-xs px-3 py-1 rounded bg-gray-100 text-gray-600">Ignorés</button>
+                    <button onclick="setStatusFilter('all')" id="statusAll" class="status-btn text-xs px-3 py-1 rounded bg-gray-100 text-gray-600">Tous</button>
                 </div>
             </div>
             <div id="emailList" class="email-list flex-1 overflow-y-auto">
@@ -170,20 +175,25 @@
     <script>
         let selectedEmailId = null;
         let currentEmails = [];
+        let allEmails = [];  // Tous les emails non filtrés
         let isCompactMode = false;
+        let currentMainFilter = 'ATTENTE';  // ATTENTE, AUTO, SPAM
+        let currentStatusFilter = 'pending';  // pending, sent, ignored, all
+
+        // Catégories AUTO (réponse automatique possible)
+        const autoCategories = ['SUIVI', 'QUESTION_PRODUIT', 'LIVRAISON'];
 
         // Catégories et couleurs
-        // AUTO = vert (peut être auto-répondu), MANUAL = orange (validation humaine)
         const categoryColors = {
-            'SUIVI': 'bg-green-100 text-green-800',           // AUTO
-            'QUESTION_PRODUIT': 'bg-green-100 text-green-800', // AUTO
-            'LIVRAISON': 'bg-green-100 text-green-800',        // AUTO
-            'RETOUR': 'bg-orange-100 text-orange-800',         // MANUAL
-            'PROBLEME': 'bg-red-100 text-red-800',             // MANUAL
-            'MODIFICATION': 'bg-yellow-100 text-yellow-800',   // MANUAL
-            'QUESTION': 'bg-purple-100 text-purple-800',       // Legacy
-            'SPAM': 'bg-gray-300 text-gray-600',               // SPAM
-            'AUTRE': 'bg-gray-100 text-gray-800'               // MANUAL
+            'SUIVI': 'bg-green-100 text-green-800',
+            'QUESTION_PRODUIT': 'bg-green-100 text-green-800',
+            'LIVRAISON': 'bg-green-100 text-green-800',
+            'RETOUR': 'bg-orange-100 text-orange-800',
+            'PROBLEME': 'bg-red-100 text-red-800',
+            'MODIFICATION': 'bg-yellow-100 text-yellow-800',
+            'QUESTION': 'bg-purple-100 text-purple-800',
+            'SPAM': 'bg-gray-400 text-white',
+            'AUTRE': 'bg-gray-100 text-gray-800'
         };
 
         const categoryLabels = {
@@ -198,8 +208,67 @@
             'AUTRE': '📋 Autre'
         };
 
-        // Catégories AUTO vs MANUAL
-        const autoCategories = ['SUIVI', 'QUESTION_PRODUIT', 'LIVRAISON'];
+        // ========== FILTRES PRINCIPAUX ==========
+        function setMainFilter(filter) {
+            currentMainFilter = filter;
+
+            // Mise à jour visuelle des boutons
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('bg-orange-500', 'bg-green-500', 'bg-gray-500', 'text-white');
+                btn.classList.add('bg-gray-200', 'text-gray-700');
+            });
+
+            const activeBtn = document.getElementById('filter' + filter);
+            if (activeBtn) {
+                activeBtn.classList.remove('bg-gray-200', 'text-gray-700');
+                if (filter === 'ATTENTE') activeBtn.classList.add('bg-orange-500', 'text-white');
+                else if (filter === 'AUTO') activeBtn.classList.add('bg-green-500', 'text-white');
+                else if (filter === 'SPAM') activeBtn.classList.add('bg-gray-500', 'text-white');
+            }
+
+            renderEmailList();
+        }
+
+        function setStatusFilter(status) {
+            currentStatusFilter = status;
+
+            // Mise à jour visuelle des boutons de statut
+            document.querySelectorAll('.status-btn').forEach(btn => {
+                btn.classList.remove('bg-yellow-100', 'text-yellow-700', 'font-medium');
+                btn.classList.add('bg-gray-100', 'text-gray-600');
+            });
+
+            const activeBtn = document.getElementById('status' + status.charAt(0).toUpperCase() + status.slice(1));
+            if (activeBtn) {
+                activeBtn.classList.remove('bg-gray-100', 'text-gray-600');
+                activeBtn.classList.add('bg-yellow-100', 'text-yellow-700', 'font-medium');
+            }
+
+            loadEmails();
+        }
+
+        // Classifie un email selon les 3 catégories principales
+        function getEmailMainCategory(email) {
+            if (email.category === 'SPAM') return 'SPAM';
+            if (autoCategories.includes(email.category)) return 'AUTO';
+            return 'ATTENTE';  // Tout le reste = attente validation humaine
+        }
+
+        // Met à jour les compteurs sur les boutons
+        function updateFilterCounts() {
+            let countAttente = 0, countAuto = 0, countSpam = 0;
+
+            allEmails.forEach(email => {
+                const mainCat = getEmailMainCategory(email);
+                if (mainCat === 'ATTENTE') countAttente++;
+                else if (mainCat === 'AUTO') countAuto++;
+                else if (mainCat === 'SPAM') countSpam++;
+            });
+
+            document.getElementById('countATTENTE').textContent = countAttente;
+            document.getElementById('countAUTO').textContent = countAuto;
+            document.getElementById('countSPAM').textContent = countSpam;
+        }
 
         // Toast notification
         function showToast(message, type = 'success') {
@@ -236,31 +305,27 @@
             }
         }
 
-        // Filtrer par catégorie (côté client)
-        function filterByCategory() {
-            renderEmailList();
-        }
-
-        // Afficher la liste filtrée
+        // Afficher la liste filtrée selon le filtre principal (ATTENTE, AUTO, SPAM)
         function renderEmailList() {
             const list = document.getElementById('emailList');
-            const categoryFilter = document.getElementById('categoryFilter').value;
 
-            let filteredEmails = currentEmails;
+            // Filtre les emails selon le filtre principal actif
+            let filteredEmails = allEmails.filter(email => {
+                return getEmailMainCategory(email) === currentMainFilter;
+            });
 
-            if (categoryFilter === 'auto') {
-                filteredEmails = currentEmails.filter(e => autoCategories.includes(e.category));
-            } else if (categoryFilter === 'manual') {
-                filteredEmails = currentEmails.filter(e => !autoCategories.includes(e.category) && e.category !== 'SPAM');
-            } else if (categoryFilter !== 'all') {
-                filteredEmails = currentEmails.filter(e => e.category === categoryFilter);
-            }
+            currentEmails = filteredEmails;
 
             if (filteredEmails.length === 0) {
+                const emptyMessages = {
+                    'ATTENTE': 'Aucun email en attente de réponse',
+                    'AUTO': 'Aucun email pour réponse automatique',
+                    'SPAM': 'Aucun spam détecté'
+                };
                 list.innerHTML = `
                     <div class="p-8 text-center text-gray-400">
                         <i class="fas fa-inbox text-4xl mb-4"></i>
-                        <p>Aucun email</p>
+                        <p>${emptyMessages[currentMainFilter] || 'Aucun email'}</p>
                     </div>
                 `;
                 return;
@@ -275,7 +340,6 @@
                                 <span class="category-badge ${categoryColors[email.category] || categoryColors['AUTRE']}">
                                     ${categoryLabels[email.category] || '📋 Autre'}
                                 </span>
-                                ${autoCategories.includes(email.category) ? '<span class="text-xs bg-green-500 text-white px-1 rounded">AUTO</span>' : ''}
                                 ${email.order_number ? `<span class="text-xs text-gray-400">#${email.order_number}</span>` : ''}
                                 ${!email.is_read ? '<span class="w-2 h-2 bg-blue-500 rounded-full"></span>' : ''}
                             </div>
@@ -290,18 +354,18 @@
             `).join('');
         }
 
-        // Charger les emails
+        // Charger les emails depuis l'API
         async function loadEmails() {
-            const status = document.getElementById('statusFilter').value;
             const list = document.getElementById('emailList');
 
             try {
-                const res = await fetch(`/api/emails?status=${status}`);
+                const res = await fetch(`/api/emails?status=${currentStatusFilter}`);
                 const data = await res.json();
 
                 if (data.success) {
-                    currentEmails = data.emails;
-                    renderEmailList();  // Utilise la fonction de rendu avec filtrage
+                    allEmails = data.emails;
+                    updateFilterCounts();
+                    renderEmailList();
                 }
             } catch (e) {
                 console.error('Erreur:', e);
