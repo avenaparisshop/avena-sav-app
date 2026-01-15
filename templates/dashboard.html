@@ -198,12 +198,15 @@
         let currentMainFilter = 'MANUEL';  // MANUEL, AUTO, SPAM
         let currentStatusFilter = 'pending';  // pending, sent, ignored, all
 
-        // 3 catégories simples : AUTO, MANUEL, SPAM
+        // 3 catégories simples : AUTO, MANUEL, SPAM + PENDING pour classification en cours
+        let isClassifying = false;  // Flag pour éviter double classification
+
         // Catégories et couleurs
         const categoryColors = {
             'AUTO': 'bg-green-100 text-green-800',
             'MANUEL': 'bg-orange-100 text-orange-800',
             'SPAM': 'bg-gray-400 text-white',
+            'PENDING': 'bg-blue-100 text-blue-800',  // En cours de classification
             // Anciennes catégories pour compatibilité (emails existants)
             'SUIVI': 'bg-green-100 text-green-800',
             'QUESTION_PRODUIT': 'bg-green-100 text-green-800',
@@ -212,11 +215,14 @@
             'PROBLEME': 'bg-red-100 text-red-800',
             'MODIFICATION': 'bg-yellow-100 text-yellow-800',
             'QUESTION': 'bg-purple-100 text-purple-800',
-            'SPAM': 'bg-gray-400 text-white',
             'AUTRE': 'bg-gray-100 text-gray-800'
         };
 
         const categoryLabels = {
+            'AUTO': '🤖 Auto',
+            'MANUEL': '👤 Manuel',
+            'SPAM': '🚫 Spam',
+            'PENDING': '⏳ Classification...',
             'SUIVI': '📦 Suivi',
             'QUESTION_PRODUIT': '❓ Produit',
             'LIVRAISON': '🚚 Livraison',
@@ -224,7 +230,6 @@
             'PROBLEME': '⚠️ Problème',
             'MODIFICATION': '✏️ Modif.',
             'QUESTION': '❓ Question',
-            'SPAM': '🚫 Spam',
             'AUTRE': '📋 Autre'
         };
 
@@ -273,6 +278,7 @@
             if (cat === 'SPAM') return 'SPAM';
             if (cat === 'AUTO') return 'AUTO';
             if (cat === 'MANUEL') return 'MANUEL';
+            if (cat === 'PENDING') return 'MANUEL';  // PENDING affiché dans MANUEL en attendant
             // Anciennes catégories pour compatibilité
             if (['SUIVI', 'QUESTION_PRODUIT', 'LIVRAISON'].includes(cat)) return 'AUTO';
             return 'MANUEL';  // Tout le reste = validation humaine
@@ -280,7 +286,7 @@
 
         // Met à jour les compteurs sur les boutons
         function updateFilterCounts() {
-            let countManuel = 0, countAuto = 0, countSpam = 0;
+            let countManuel = 0, countAuto = 0, countSpam = 0, countPending = 0;
 
             allEmails.forEach(email => {
                 const mainCat = getEmailMainCategory(email);
@@ -688,7 +694,7 @@
         async function fetchNewEmails() {
             const btn = document.getElementById('refreshBtn');
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Chargement...';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Récupération...';
 
             try {
                 const res = await fetch('/api/fetch-emails', { method: 'POST' });
@@ -696,8 +702,13 @@
 
                 if (data.success) {
                     showToast(data.message);
-                    loadEmails();
+                    await loadEmails();
                     loadStats();
+
+                    // Lance la classification automatique si des emails sont en attente
+                    if (data.to_classify > 0) {
+                        classifyEmailsProgressively();
+                    }
                 } else {
                     showToast(data.message, 'error');
                 }
@@ -709,10 +720,60 @@
             }
         }
 
+        // Classification progressive des emails (1 par 1)
+        async function classifyEmailsProgressively() {
+            if (isClassifying) return;  // Évite les doubles appels
+            isClassifying = true;
+
+            const btn = document.getElementById('refreshBtn');
+            let classified = 0;
+
+            try {
+                while (true) {
+                    btn.innerHTML = `<i class="fas fa-brain mr-2"></i>Classification ${classified + 1}...`;
+
+                    const res = await fetch('/api/classify-next', { method: 'POST' });
+                    const data = await res.json();
+
+                    if (!data.success) {
+                        showToast('Erreur classification: ' + data.message, 'error');
+                        break;
+                    }
+
+                    if (data.done) {
+                        showToast(`Classification terminée (${classified} emails)`);
+                        break;
+                    }
+
+                    classified++;
+
+                    // Rafraîchit la liste après chaque classification
+                    await loadEmails();
+                    updateFilterCounts();
+
+                    // Petit délai pour ne pas surcharger l'API Claude
+                    await new Promise(r => setTimeout(r, 500));
+                }
+            } catch (e) {
+                console.error('Erreur classification:', e);
+                showToast('Erreur lors de la classification', 'error');
+            } finally {
+                isClassifying = false;
+                btn.innerHTML = '<i class="fas fa-sync-alt mr-2"></i>Actualiser';
+                loadStats();
+            }
+        }
+
         // Init
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             loadStats();
-            loadEmails();
+            await loadEmails();
+
+            // Vérifie s'il y a des emails PENDING à classifier au chargement
+            const pendingCount = allEmails.filter(e => e.category === 'PENDING').length;
+            if (pendingCount > 0) {
+                classifyEmailsProgressively();
+            }
         });
     </script>
 </body>

@@ -491,7 +491,7 @@ def regenerate_response(email_id):
 
 @app.route('/api/fetch-emails', methods=['POST'])
 def fetch_new_emails():
-    """Recupere les nouveaux emails depuis Zoho avec detection spam automatique"""
+    """Recupere les nouveaux emails depuis Zoho - enregistre d'abord, classifie apres"""
     try:
         handler = get_email_handler()
 
@@ -503,20 +503,20 @@ def fetch_new_emails():
                 'message': 'Erreur connexion IMAP - verifiez les identifiants Zoho'
             }), 500
 
-        # Import du detecteur de spam
+        # Import du detecteur de spam (rapide, pas d'IA)
         from modules.spam_detector import detect_spam
 
-        # Recupere les emails de TOUS les dossiers importants
-        # Limite a 100 emails par dossier pour eviter les timeouts
+        # Recupere les emails - limite a 50 pour eviter les timeouts
         logger.info("Debut recuperation emails depuis IMAP...")
         new_emails = handler.fetch_emails_from_folders(
             folders=["INBOX"],
-            limit_per_folder=100
+            limit_per_folder=50
         )
         logger.info(f"Emails recuperes: {len(new_emails)}")
 
         processed = 0
         spam_count = 0
+        to_classify = 0
 
         for email_data in new_emails:
             # Verifie si deja en base
@@ -524,7 +524,7 @@ def fetch_new_emails():
             if existing:
                 continue
 
-            # Detection automatique de spam
+            # Detection automatique de spam (RAPIDE - pas d'IA)
             is_spam, spam_score, spam_reason = detect_spam(
                 email_data.get('sender_email', ''),
                 email_data.get('sender_name', ''),
@@ -532,33 +532,20 @@ def fetch_new_emails():
                 email_data.get('body', '')
             )
 
-            # Definit la categorie et le statut selon le spam
+            # Definit la categorie selon le spam
             if is_spam:
                 category = 'SPAM'
                 confidence = spam_score
-                status = 'ignored'  # Auto-ignore
+                status = 'ignored'
                 spam_count += 1
             else:
-                # Classification IA pour les non-spam
-                try:
-                    ai_responder = get_ai_responder()
-                    if ai_responder:
-                        category, confidence = ai_responder.classify_email(
-                            email_data.get('subject', ''),
-                            email_data.get('body', '')
-                        )
-                        logger.info(f"Email classifie par IA: {category} ({confidence:.0%})")
-                    else:
-                        category = 'AUTRE'
-                        confidence = 0.0
-                        logger.warning("AI Responder non disponible - categorie par defaut")
-                except Exception as e:
-                    logger.error(f"Erreur classification IA: {e}")
-                    category = 'AUTRE'
-                    confidence = 0.0
+                # PAS de classification IA ici - on met en attente
+                category = 'PENDING'  # Sera classifie apres
+                confidence = 0.0
                 status = 'pending'
+                to_classify += 1
 
-            # Cree l'enregistrement avec detection spam ou classification IA
+            # Cree l'enregistrement IMMEDIATEMENT
             email_record = Email(
                 message_id=email_data['message_id'],
                 sender_email=email_data['sender_email'],
@@ -574,16 +561,18 @@ def fetch_new_emails():
             )
 
             db.session.add(email_record)
+            db.session.commit()  # Commit chaque email individuellement
             processed += 1
+            logger.info(f"Email {processed} enregistre: {email_data.get('subject', '')[:50]}")
 
-        db.session.commit()
         handler.disconnect_imap()
 
         return jsonify({
             'success': True,
-            'message': f'{processed} nouveaux emails ({spam_count} spam detectes)',
+            'message': f'{processed} emails ({spam_count} spam, {to_classify} a classifier)',
             'processed': processed,
-            'spam_detected': spam_count
+            'spam_detected': spam_count,
+            'to_classify': to_classify
         })
 
     except Exception as e:
@@ -596,17 +585,88 @@ def fetch_new_emails():
         }), 500
 
 
+@app.route('/api/classify-next', methods=['POST'])
+def classify_next_email():
+    """Classifie UN SEUL email en attente avec l'IA - appele en boucle par le frontend"""
+    try:
+        # Trouve le prochain email a classifier (PENDING ou sans categorie valide)
+        email = Email.query.filter(
+            (Email.category == 'PENDING') |
+            (Email.category == None) |
+            (Email.category == 'AUTRE') |
+            (~Email.category.in_(['AUTO', 'MANUEL', 'SPAM']))
+        ).first()
+
+        if not email:
+            return jsonify({
+                'success': True,
+                'done': True,
+                'message': 'Tous les emails sont classifies'
+            })
+
+        # Classification IA
+        try:
+            ai_responder = get_ai_responder()
+            if ai_responder:
+                category, confidence = ai_responder.classify_email(
+                    email.subject or '',
+                    email.body or ''
+                )
+                email.category = category
+                email.confidence = confidence
+                logger.info(f"Email {email.id} classifie: {category} ({confidence:.0%})")
+            else:
+                email.category = 'MANUEL'
+                email.confidence = 0.0
+                logger.warning(f"AI non disponible - email {email.id} mis en MANUEL")
+        except Exception as e:
+            logger.error(f"Erreur classification email {email.id}: {e}")
+            email.category = 'MANUEL'
+            email.confidence = 0.0
+
+        db.session.commit()
+
+        # Compte combien il en reste
+        remaining = Email.query.filter(
+            (Email.category == 'PENDING') |
+            (Email.category == None) |
+            (Email.category == 'AUTRE') |
+            (~Email.category.in_(['AUTO', 'MANUEL', 'SPAM']))
+        ).count()
+
+        return jsonify({
+            'success': True,
+            'done': False,
+            'classified': {
+                'id': email.id,
+                'subject': email.subject,
+                'category': email.category,
+                'confidence': email.confidence
+            },
+            'remaining': remaining,
+            'message': f'Email classifie: {email.category}'
+        })
+
+    except Exception as e:
+        logger.error(f"Erreur classify-next: {e}")
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        }), 500
+
+
 @app.route('/api/reclassify-emails', methods=['POST'])
 def reclassify_all_emails():
     """Reclassifie tous les emails en attente avec l'IA et le detecteur de spam"""
     try:
         from modules.spam_detector import detect_spam
 
-        # Recupere tous les emails pending sans categorie ou avec categorie AUTRE
+        # Recupere tous les emails pending sans categorie ou avec anciennes categories
         emails_to_classify = Email.query.filter(
             (Email.status == 'pending') |
             (Email.category == None) |
-            (Email.category == 'AUTRE')
+            (Email.category == 'AUTRE') |
+            (Email.category.notin_(['AUTO', 'MANUEL', 'SPAM']))
         ).all()
 
         logger.info(f"Reclassification de {len(emails_to_classify)} emails...")
@@ -643,7 +703,7 @@ def reclassify_all_emails():
                         logger.info(f"Email {email.id} classifie: {category} ({confidence:.0%})")
                 except Exception as e:
                     logger.error(f"Erreur classification email {email.id}: {e}")
-                    email.category = 'AUTRE'
+                    email.category = 'MANUEL'
                     email.confidence = 0.0
 
             reclassified += 1
