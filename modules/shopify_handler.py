@@ -143,6 +143,87 @@ class ShopifyHandler:
 
         return None
 
+    def search_customer_by_name(self, name: str) -> Optional[Dict]:
+        """
+        Recherche un client par nom (prénom et/ou nom de famille)
+
+        Args:
+            name: Nom du client (ex: "Angela Monte" ou "Monte")
+
+        Returns:
+            Dictionnaire avec les infos client ou None
+        """
+        if not name or len(name.strip()) < 2:
+            return None
+
+        # Nettoie le nom
+        name_clean = name.strip()
+
+        # Recherche par nom complet
+        data = self._make_request(
+            "customers/search.json",
+            params={"query": name_clean}
+        )
+
+        if data and data.get('customers'):
+            # Prend le premier résultat
+            customer = data['customers'][0]
+            return self._format_customer(customer)
+
+        return None
+
+    def find_customer_orders(self, email: str = None, name: str = None) -> Dict:
+        """
+        Recherche un client et ses commandes par email OU par nom
+
+        Args:
+            email: Email du client (prioritaire)
+            name: Nom du client (utilisé si email ne trouve rien)
+
+        Returns:
+            Dict avec 'customer', 'orders', 'found', 'search_method'
+        """
+        result = {
+            'customer': None,
+            'orders': [],
+            'found': False,
+            'search_method': None,
+            'last_order_number': None
+        }
+
+        # 1. D'abord chercher par email (plus fiable)
+        if email:
+            orders = self.search_orders_by_email(email, limit=5)
+            if orders:
+                result['orders'] = orders
+                result['found'] = True
+                result['search_method'] = 'email'
+                result['last_order_number'] = orders[0].get('order_number')
+
+                # Récupère aussi les infos client
+                customer = self.get_customer_by_email(email)
+                if customer:
+                    result['customer'] = customer
+
+                return result
+
+        # 2. Si pas trouvé par email, chercher par nom
+        if name:
+            customer = self.search_customer_by_name(name)
+            if customer:
+                result['customer'] = customer
+                result['found'] = True
+                result['search_method'] = 'name'
+
+                # Récupère les commandes via l'email du client trouvé
+                if customer.get('email'):
+                    orders = self.search_orders_by_email(customer['email'], limit=5)
+                    if orders:
+                        result['orders'] = orders
+                        result['last_order_number'] = orders[0].get('order_number')
+
+        return result
+
     def _format_order(self, order: Dict) -> Dict:
         """Formate les données d'une commande pour l'usage SAV"""
 

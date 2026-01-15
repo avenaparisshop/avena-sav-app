@@ -571,7 +571,11 @@ def regenerate_response(email_id):
 
 @app.route('/api/fetch-emails', methods=['POST'])
 def fetch_new_emails():
-    """Recupere les nouveaux emails depuis Zoho - enregistre d'abord, classifie apres"""
+    """Recupere les nouveaux emails depuis Zoho - enregistre d'abord, classifie apres
+
+    Enrichit automatiquement les emails avec les infos client Shopify
+    (numéro de commande) en cherchant par email et nom de l'expéditeur.
+    """
     try:
         handler = get_email_handler()
 
@@ -596,9 +600,22 @@ def fetch_new_emails():
         )
         logger.info(f"Emails recuperes: {len(new_emails)}")
 
+        # Prépare la détection de langue et recherche client
+        ai = get_ai_responder()
+        lang_to_shop = {
+            'fr': 'tgir1c-x2',
+            'nl': 'qk16wv-2e',
+            'es': 'jl1brs-gp',
+            'it': 'pz5e9e-2e',
+            'de': 'u06wln-hf',
+            'pl': 'xptmak-r7',
+            'en': 'fyh99s-h9'
+        }
+
         processed = 0
         spam_count = 0
         to_classify = 0
+        customers_found = 0
 
         for email_data in new_emails:
             # Verifie si deja en base
@@ -627,6 +644,32 @@ def fetch_new_emails():
                 status = 'pending'
                 to_classify += 1
 
+            # === ENRICHISSEMENT CLIENT SHOPIFY ===
+            # Si pas de numéro de commande trouvé, cherche par email/nom dans Shopify
+            order_number = email_data.get('order_number')
+
+            if not order_number and not is_spam:
+                try:
+                    # Détecte la langue pour choisir le bon shop
+                    email_text = f"{email_data.get('subject', '')} {email_data.get('body', '')}"
+                    language = ai.detect_language(email_text) if ai else 'fr'
+                    target_shop = lang_to_shop.get(language, 'tgir1c-x2')
+
+                    shopify = get_shopify_handler(target_shop)
+                    if shopify:
+                        # Recherche le client par email ET par nom
+                        result = shopify.find_customer_orders(
+                            email=email_data.get('sender_email'),
+                            name=email_data.get('sender_name')
+                        )
+
+                        if result['found'] and result['last_order_number']:
+                            order_number = result['last_order_number']
+                            customers_found += 1
+                            logger.info(f"Client trouvé: {email_data.get('sender_name')} -> commande #{order_number} (via {result['search_method']})")
+                except Exception as e:
+                    logger.debug(f"Erreur recherche client Shopify: {e}")
+
             # Cree l'enregistrement IMMEDIATEMENT
             email_record = Email(
                 message_id=email_data['message_id'],
@@ -637,7 +680,7 @@ def fetch_new_emails():
                 received_at=email_data.get('received_at'),
                 category=category,
                 confidence=confidence,
-                order_number=email_data.get('order_number'),
+                order_number=order_number,  # Peut maintenant venir de Shopify
                 generated_response=None,
                 status=status
             )
@@ -651,10 +694,11 @@ def fetch_new_emails():
 
         return jsonify({
             'success': True,
-            'message': f'{processed} emails ({spam_count} spam, {to_classify} a classifier)',
+            'message': f'{processed} emails ({spam_count} spam, {to_classify} a classifier, {customers_found} clients identifies)',
             'processed': processed,
             'spam_detected': spam_count,
-            'to_classify': to_classify
+            'to_classify': to_classify,
+            'customers_found': customers_found
         })
 
     except Exception as e:
@@ -955,7 +999,11 @@ def apply_learned_spam():
 
 @app.route('/api/redetect-spam', methods=['POST'])
 def redetect_spam():
-    """Re-detecte le spam sur TOUS les emails (utilise les nouveaux patterns)"""
+    """Re-detecte le spam sur TOUS les emails (utilise les nouveaux patterns)
+
+    Déplace automatiquement les spams détectés vers le dossier spam de Zoho
+    pour les bloquer, mais les garde dans l'app pour vérifier les faux positifs.
+    """
     try:
         from modules.spam_detector import detect_spam
 
@@ -965,6 +1013,8 @@ def redetect_spam():
         logger.info(f"Re-detection spam sur {len(emails)} emails...")
 
         spam_detected = 0
+        fake_brands_detected = 0
+        new_spam_message_ids = []
 
         for email in emails:
             is_spam, spam_score, spam_reason = detect_spam(
@@ -979,14 +1029,34 @@ def redetect_spam():
                 email.confidence = spam_score
                 email.status = 'ignored'
                 spam_detected += 1
-                logger.info(f"SPAM detecte: {email.id} - {email.subject[:50]}... (raison: {spam_reason})")
+                new_spam_message_ids.append(email.message_id)
+
+                # Compte les faux emails de marques
+                if 'fake_brand' in spam_reason:
+                    fake_brands_detected += 1
+                    logger.warning(f"FAUX EMAIL MARQUE: {email.id} - {email.sender_email} - {spam_reason}")
+                else:
+                    logger.info(f"SPAM detecte: {email.id} - {email.subject[:50]}... (raison: {spam_reason})")
 
         db.session.commit()
 
+        # === DÉPLACEMENT AUTOMATIQUE VERS ZOHO SPAM ===
+        moved_to_zoho = 0
+        if new_spam_message_ids:
+            try:
+                handler = get_email_handler()
+                results = handler.move_emails_to_spam_batch(new_spam_message_ids)
+                moved_to_zoho = results.get('success_count', 0)
+                logger.info(f"Spams déplacés vers Zoho: {moved_to_zoho}/{len(new_spam_message_ids)}")
+            except Exception as e:
+                logger.error(f"Erreur déplacement vers Zoho: {e}")
+
         return jsonify({
             'success': True,
-            'message': f'{spam_detected} nouveaux spams detectes sur {len(emails)} emails',
+            'message': f'{spam_detected} nouveaux spams detectes ({fake_brands_detected} faux emails de marques), {moved_to_zoho} déplacés vers Zoho',
             'spam_detected': spam_detected,
+            'fake_brands_detected': fake_brands_detected,
+            'moved_to_zoho': moved_to_zoho,
             'total_checked': len(emails)
         })
 
@@ -1036,6 +1106,170 @@ def move_spam_to_zoho():
 
     except Exception as e:
         logger.error(f"Erreur move spam to Zoho: {e}")
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        }), 500
+
+
+@app.route('/api/check-customer', methods=['POST'])
+def check_customer():
+    """Vérifie si un expéditeur est un client existant dans Shopify
+
+    Recherche par email et/ou nom dans le shop de la langue détectée.
+    Retourne le numéro de commande si trouvé.
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'message': 'Données manquantes'}), 400
+
+        sender_email = data.get('email', '').lower().strip()
+        sender_name = data.get('name', '').strip()
+        email_text = data.get('text', '')  # Sujet + body pour détecter la langue
+
+        if not sender_email and not sender_name:
+            return jsonify({'success': False, 'message': 'Email ou nom requis'}), 400
+
+        # Détecte la langue pour choisir le bon shop
+        ai = get_ai_responder()
+        language = 'fr'  # Défaut
+        if email_text and ai:
+            language = ai.detect_language(email_text)
+
+        # Mapping langue -> shop
+        lang_to_shop = {
+            'fr': 'tgir1c-x2',
+            'nl': 'qk16wv-2e',
+            'es': 'jl1brs-gp',
+            'it': 'pz5e9e-2e',
+            'de': 'u06wln-hf',
+            'pl': 'xptmak-r7',
+            'en': 'fyh99s-h9'
+        }
+
+        target_shop = lang_to_shop.get(language, 'tgir1c-x2')
+        shopify = get_shopify_handler(target_shop)
+
+        if not shopify:
+            # Essaie avec le premier shop disponible
+            storage = get_token_storage_instance()
+            shops = storage.get_all_shops()
+            if shops:
+                target_shop = list(shops.keys())[0]
+                shopify = get_shopify_handler(target_shop)
+
+        if not shopify:
+            return jsonify({
+                'success': False,
+                'message': 'Aucun shop Shopify connecté',
+                'is_customer': False
+            })
+
+        # Recherche le client
+        result = shopify.find_customer_orders(email=sender_email, name=sender_name)
+
+        if result['found']:
+            return jsonify({
+                'success': True,
+                'is_customer': True,
+                'customer': result['customer'],
+                'last_order_number': result['last_order_number'],
+                'orders_count': len(result['orders']),
+                'search_method': result['search_method'],
+                'shop_used': target_shop,
+                'language': language
+            })
+        else:
+            return jsonify({
+                'success': True,
+                'is_customer': False,
+                'message': 'Client non trouvé',
+                'shop_used': target_shop,
+                'language': language
+            })
+
+    except Exception as e:
+        logger.error(f"Erreur check-customer: {e}")
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        }), 500
+
+
+@app.route('/api/emails/enrich-customer-info', methods=['POST'])
+def enrich_emails_customer_info():
+    """Enrichit les emails en base avec les infos client Shopify
+
+    Pour chaque email sans numéro de commande, vérifie si l'expéditeur
+    est un client existant et ajoute le numéro de commande.
+    """
+    try:
+        # Récupère les emails sans numéro de commande (non-spam)
+        emails = Email.query.filter(
+            Email.order_number == None,
+            Email.category != 'SPAM'
+        ).limit(50).all()
+
+        if not emails:
+            return jsonify({
+                'success': True,
+                'message': 'Aucun email à enrichir',
+                'enriched': 0
+            })
+
+        ai = get_ai_responder()
+        enriched_count = 0
+
+        # Mapping langue -> shop
+        lang_to_shop = {
+            'fr': 'tgir1c-x2',
+            'nl': 'qk16wv-2e',
+            'es': 'jl1brs-gp',
+            'it': 'pz5e9e-2e',
+            'de': 'u06wln-hf',
+            'pl': 'xptmak-r7',
+            'en': 'fyh99s-h9'
+        }
+
+        for email in emails:
+            try:
+                # Détecte la langue
+                email_text = f"{email.subject or ''} {email.body or ''}"
+                language = ai.detect_language(email_text) if ai else 'fr'
+
+                target_shop = lang_to_shop.get(language, 'tgir1c-x2')
+                shopify = get_shopify_handler(target_shop)
+
+                if not shopify:
+                    continue
+
+                # Recherche le client
+                result = shopify.find_customer_orders(
+                    email=email.sender_email,
+                    name=email.sender_name
+                )
+
+                if result['found'] and result['last_order_number']:
+                    email.order_number = result['last_order_number']
+                    enriched_count += 1
+                    logger.info(f"Email {email.id} enrichi: commande #{result['last_order_number']} (via {result['search_method']})")
+
+            except Exception as e:
+                logger.error(f"Erreur enrichissement email {email.id}: {e}")
+                continue
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': f'{enriched_count} emails enrichis avec numéro de commande',
+            'enriched': enriched_count,
+            'total_checked': len(emails)
+        })
+
+    except Exception as e:
+        logger.error(f"Erreur enrich-customer-info: {e}")
         return jsonify({
             'success': False,
             'message': str(e)

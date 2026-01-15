@@ -11,6 +11,19 @@ logger = logging.getLogger(__name__)
 # Patterns connus de spam (basés sur les emails du dossier Courrier indésirable)
 # Ces patterns sont extraits des emails que l'utilisateur a déjà marqués comme spam
 
+# === DOMAINES OFFICIELS (pour vérification des faux) ===
+# Ces domaines sont les SEULS légitimes pour ces marques
+OFFICIAL_DOMAINS = {
+    'shopify': ['@shopify.com', '@shopifymail.com', '@shopifyemail.com', '@shop.app', '@myshopify.com'],
+    'meta': ['@meta.com', '@metamail.com', '@fb.com'],
+    'facebook': ['@facebookmail.com', '@facebook.com', '@fb.com', '@support.facebook.com'],
+    'instagram': ['@instagram.com', '@mail.instagram.com'],
+    'tiktok': ['@tiktok.com', '@tiktokmail.com', '@bytedance.com'],
+    'google': ['@google.com', '@googlemail.com', '@accounts.google.com'],
+    'paypal': ['@paypal.com', '@paypal.fr', '@e.paypal.com', '@e.paypal.fr'],
+    'stripe': ['@stripe.com', '@stripemail.com'],
+}
+
 SPAM_SENDER_PATTERNS = [
     # Domaines suspects (faux Facebook/Meta/TikTok)
     r'@.*\.edu\.',  # Emails depuis des .edu suspects
@@ -36,12 +49,27 @@ SPAM_SENDER_PATTERNS = [
     r'@.*omnisend\.com$',   # omnisend.com - spam marketing
     r'@mail\.ru$',          # mail.ru - spam russe
 
-    # === FAUX SUPPORT SHOPIFY (Gmail) ===
+    # === FAUX SUPPORT SHOPIFY (n'importe quel domaine sauf officiel) ===
     r'shopify.*@gmail\.com',           # shopifykelvinteam, shopifyappguide, etc.
     r'info\.shopify.*@gmail\.com',     # info.shopifystoresb.co, etc.
     r'contact\.shopify.*@gmail\.com',  # contact.shopifymailer
     r'mailer\.shopify.*@gmail\.com',   # mailer.shopifycomplianceservice
     r'support.*shopify.*@gmail\.com',  # support Shopify fake
+    r'shopify.*@.*\.com$',             # Tout email avec "shopify" qui n'est pas @shopify.com
+    r'shopify.*@outlook\.com',         # Faux Shopify Outlook
+    r'shopify.*@hotmail\.com',         # Faux Shopify Hotmail
+    r'shopify.*@yahoo\.com',           # Faux Shopify Yahoo
+
+    # === FAUX SUPPORT META/FACEBOOK (n'importe quel domaine sauf officiel) ===
+    r'meta.*@gmail\.com',              # Faux Meta Gmail
+    r'facebook.*@gmail\.com',          # Faux Facebook Gmail
+    r'fb.*support.*@gmail\.com',       # Faux FB support
+    r'meta.*@outlook\.com',            # Faux Meta Outlook
+    r'facebook.*@outlook\.com',        # Faux Facebook Outlook
+    r'meta.*@hotmail\.com',            # Faux Meta Hotmail
+    r'facebook.*@hotmail\.com',        # Faux Facebook Hotmail
+    r'instagram.*@gmail\.com',         # Faux Instagram Gmail
+    r'instagram.*@outlook\.com',       # Faux Instagram Outlook
 
     # === GMAIL SUSPECTS (patterns de noms) ===
     r'.*digital\d+@gmail\.com',        # horlarfydigital128, bastechdigital003
@@ -632,6 +660,54 @@ CLIENT_PATTERNS = [
 ]
 
 
+def is_fake_brand_email(sender_email: str, subject: str, sender_name: str) -> Tuple[bool, str]:
+    """
+    Détecte si l'email se fait passer pour une marque connue (Shopify, Meta, Facebook, etc.)
+    mais n'utilise pas le vrai domaine officiel.
+
+    RÈGLE: Si le sujet ou le nom de l'expéditeur mentionne Shopify/Meta/Facebook/etc.
+    mais que le domaine email n'est PAS officiel = SPAM + BLOQUER
+
+    Returns:
+        Tuple (is_fake, brand_name)
+    """
+    sender_lower = sender_email.lower() if sender_email else ''
+    subject_lower = subject.lower() if subject else ''
+    name_lower = sender_name.lower() if sender_name else ''
+    full_text = f"{subject_lower} {name_lower}"
+
+    # Liste des marques à vérifier
+    brand_keywords = {
+        'shopify': ['shopify', 'shop.app'],
+        'meta': ['meta business', 'meta ads', 'meta support'],
+        'facebook': ['facebook', 'fb ads', 'fb business'],
+        'instagram': ['instagram', 'ig business'],
+        'tiktok': ['tiktok', 'tik tok'],
+        'google': ['google ads', 'google business', 'google merchant'],
+        'paypal': ['paypal'],
+        'stripe': ['stripe'],
+    }
+
+    for brand, keywords in brand_keywords.items():
+        # Vérifie si le sujet ou le nom mentionne la marque
+        brand_mentioned = False
+        for keyword in keywords:
+            if keyword in full_text:
+                brand_mentioned = True
+                break
+
+        if brand_mentioned:
+            # Vérifie si le domaine est officiel
+            official_domains = OFFICIAL_DOMAINS.get(brand, [])
+            is_official = any(domain in sender_lower for domain in official_domains)
+
+            if not is_official:
+                logger.warning(f"FAUX EMAIL {brand.upper()} détecté: {sender_email} (sujet/nom mentionne {brand} mais domaine non officiel)")
+                return True, brand
+
+    return False, ""
+
+
 def is_whitelisted(sender_email: str, subject: str) -> bool:
     """Vérifie si l'email est dans la whitelist (ne jamais bloquer)"""
     sender_lower = sender_email.lower()
@@ -680,6 +756,7 @@ def detect_spam(sender_email: str, sender_name: str, subject: str, body: str) ->
     LOGIQUE IMPORTANTE:
     - Si quelqu'un pose des questions sur SA commande = vrai client (jamais spam)
     - Si quelqu'un propose d'apporter des commandes/ventes = démarcheur/spam
+    - Si l'email prétend être Shopify/Meta/Facebook mais domaine non officiel = SPAM CRITIQUE
 
     Returns:
         Tuple (is_spam, confidence, reason)
@@ -687,6 +764,13 @@ def detect_spam(sender_email: str, sender_name: str, subject: str, body: str) ->
     # D'abord vérifier la whitelist
     if is_whitelisted(sender_email, subject):
         return False, 0.0, "whitelisted"
+
+    # === DÉTECTION FAUX EMAILS DE MARQUES (priorité haute) ===
+    # Un email qui se fait passer pour Shopify/Meta/Facebook = TOUJOURS SPAM
+    is_fake, fake_brand = is_fake_brand_email(sender_email, subject, sender_name)
+    if is_fake:
+        logger.warning(f"FAUX {fake_brand.upper()} BLOQUÉ: {sender_email} - {subject[:50]}...")
+        return True, 1.0, f"fake_brand:{fake_brand}"
 
     # === VÉRIFICATION VRAI CLIENT ===
     # Si l'email parle de SA propre commande, c'est un vrai client = jamais spam
