@@ -473,26 +473,30 @@
                 const convRes = await fetch(`/api/emails/${emailId}/conversation`);
                 const convData = await convRes.json();
 
-                if (convData.success && convData.conversation && convData.conversation.length > 1) {
-                    // On a une conversation avec plusieurs messages
+                if (convData.success && convData.conversation && convData.conversation.length >= 1) {
+                    // Style iMessage - bulles de conversation
                     conversationHtml = `
-                        <div class="p-4 border-b bg-purple-50">
-                            <h4 class="font-medium text-purple-700 mb-3">
-                                <i class="fas fa-comments mr-2"></i>Historique de la conversation (${convData.message_count} messages)
-                            </h4>
-                            <div class="space-y-4">
-                                ${convData.conversation.map(msg => `
-                                    <div class="p-4 rounded-lg ${msg.type === 'sent' ? 'bg-green-100 ml-4' : 'bg-white mr-4'} border">
-                                        <div class="flex items-center justify-between mb-2">
-                                            <span class="text-sm font-medium ${msg.type === 'sent' ? 'text-green-700' : 'text-gray-700'}">
-                                                ${msg.type === 'sent' ? '<i class="fas fa-reply mr-1"></i>Notre réponse' : '<i class="fas fa-user mr-1"></i>' + (msg.sender_name || 'Client')}
-                                            </span>
-                                            <span class="text-xs text-gray-400">${formatDate(msg.sent_at || msg.received_at)}</span>
+                        <div class="p-4 bg-gray-100 min-h-96">
+                            <div class="flex flex-col space-y-3">
+                                ${convData.conversation.map(msg => {
+                                    const isSent = msg.type === 'sent';
+                                    return `
+                                        <div class="flex ${isSent ? 'justify-end' : 'justify-start'}">
+                                            <div class="max-w-[75%] ${isSent ? 'order-2' : 'order-1'}">
+                                                <div class="px-4 py-3 rounded-2xl ${isSent
+                                                    ? 'bg-green-500 text-white rounded-br-sm'
+                                                    : 'bg-white text-gray-800 rounded-bl-sm shadow-sm'}">
+                                                    <div class="text-sm whitespace-pre-wrap">${escapeHtml(msg.body || '')}</div>
+                                                </div>
+                                                <div class="flex items-center mt-1 ${isSent ? 'justify-end' : 'justify-start'} px-2">
+                                                    <span class="text-xs text-gray-500">
+                                                        ${isSent ? 'Vous' : (msg.sender_name || 'Client')} - ${formatDate(msg.sent_at || msg.received_at)}
+                                                    </span>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <p class="text-sm text-gray-500 mb-2">${escapeHtml(msg.subject || '')}</p>
-                                        <div class="text-sm text-gray-700 whitespace-pre-wrap email-body-content">${escapeHtml(msg.body || '')}</div>
-                                    </div>
-                                `).join('')}
+                                    `;
+                                }).join('')}
                             </div>
                         </div>
                     `;
