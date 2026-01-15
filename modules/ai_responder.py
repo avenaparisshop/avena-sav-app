@@ -255,11 +255,12 @@ Note: auto_eligible = true si c'est une catégorie AUTO et que l'IA peut répond
         if confidence < 0.85:
             return False, f"Confiance insuffisante ({confidence:.0%})"
 
-        # Pour SUIVI, on a besoin du tracking
+        # Pour SUIVI, on a besoin du tracking depuis Shopify
         if category == 'SUIVI':
             has_tracking = (
-                order_context.get('parcelpanel_tracking') or
-                (order_context.get('order') and order_context['order'].get('tracking_number'))
+                order_context.get('order') and
+                (order_context['order'].get('tracking_number') or
+                 order_context['order'].get('fulfillment_status') == 'Expédié')
             )
             if not has_tracking:
                 return False, "Pas d'info de tracking disponible"
@@ -317,36 +318,37 @@ Note: auto_eligible = true si c'est une catégorie AUTO et que l'IA peut répond
             context_parts.append(f"- Statut commande : {order.get('fulfillment_status')}")
             context_parts.append(f"- Paiement : {order.get('financial_status')}")
 
+            # TRACKING depuis Shopify
             if order.get('tracking_number'):
+                context_parts.append(f"\n📦 INFORMATIONS DE SUIVI :")
                 context_parts.append(f"- Numéro de suivi : {order['tracking_number']}")
+
+                if order.get('tracking_company'):
+                    context_parts.append(f"- Transporteur : {order['tracking_company']}")
+
+                if order.get('shipment_status'):
+                    # Traduction des statuts Shopify
+                    status_map = {
+                        'confirmed': 'Pris en charge',
+                        'in_transit': 'En cours de livraison',
+                        'out_for_delivery': 'En livraison aujourd\'hui',
+                        'delivered': 'Livré',
+                        'attempted_delivery': 'Tentative de livraison',
+                        'ready_for_pickup': 'À retirer en point relais',
+                        'failure': 'Problème de livraison'
+                    }
+                    status_text = status_map.get(order['shipment_status'], order['shipment_status'])
+                    context_parts.append(f"- Statut livraison : {status_text}")
+
+                if order.get('shipped_at'):
+                    context_parts.append(f"- Date d'expédition : {order['shipped_at'][:10]}")
+
+                if order.get('tracking_url'):
+                    context_parts.append(f"- Lien de suivi : {order['tracking_url']}")
 
             if order.get('line_items'):
                 items = [f"{i['quantity']}x {i['name']}" for i in order['line_items'][:3]]
                 context_parts.append(f"- Produits : {', '.join(items)}")
-
-        # TRACKING PARCELPANEL EN TEMPS RÉEL (prioritaire)
-        if order_context.get('parcelpanel_tracking'):
-            tracking = order_context['parcelpanel_tracking']
-            context_parts.append(f"\n📦 TRACKING EN TEMPS RÉEL :")
-            context_parts.append(f"- Statut actuel : {tracking.get('status_text', 'Inconnu')}")
-
-            if tracking.get('carrier'):
-                context_parts.append(f"- Transporteur : {tracking['carrier']}")
-
-            if tracking.get('estimated_delivery'):
-                context_parts.append(f"- Livraison estimée : {tracking['estimated_delivery']}")
-
-            if tracking.get('tracking_url'):
-                context_parts.append(f"- Lien de suivi : {tracking['tracking_url']}")
-
-            if tracking.get('events') and len(tracking['events']) > 0:
-                last_event = tracking['events'][0]
-                event_desc = last_event.get('description', 'N/A')
-                event_date = last_event.get('date', '')
-                context_parts.append(f"- Dernier événement : {event_desc} ({event_date})")
-
-                if last_event.get('location'):
-                    context_parts.append(f"- Dernière localisation : {last_event['location']}")
 
         context_str = "\n".join(context_parts) if context_parts else "Aucune information de commande trouvée"
 

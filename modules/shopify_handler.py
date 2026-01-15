@@ -163,16 +163,25 @@ class ShopifyHandler:
             "voided": "Annulé"
         }
 
-        # Extraction du tracking
+        # Extraction du tracking (toutes les infos disponibles)
         tracking_info = None
         tracking_url = None
+        tracking_company = None
+        shipped_at = None
+        fulfillment_status_detail = None
 
         if order.get('fulfillments'):
             for fulfillment in order['fulfillments']:
                 if fulfillment.get('tracking_number'):
                     tracking_info = fulfillment['tracking_number']
                     tracking_url = fulfillment.get('tracking_url')
+                    tracking_company = fulfillment.get('tracking_company')
+                    shipped_at = fulfillment.get('created_at')
+                    fulfillment_status_detail = fulfillment.get('shipment_status')
                     break
+                # Même sans tracking, récupère la date d'expédition
+                elif fulfillment.get('status') == 'success':
+                    shipped_at = fulfillment.get('created_at')
 
         # Liste des produits
         line_items = []
@@ -208,6 +217,9 @@ class ShopifyHandler:
             'fulfillment_status': fulfillment_status_map.get(order.get('fulfillment_status'), order.get('fulfillment_status')),
             'tracking_number': tracking_info,
             'tracking_url': tracking_url,
+            'tracking_company': tracking_company,
+            'shipped_at': shipped_at,
+            'shipment_status': fulfillment_status_detail,
             'line_items': line_items,
             'shipping_address': shipping_address,
             'note': order.get('note'),
@@ -276,6 +288,76 @@ class ShopifyHandler:
                     context['order'] = recent_orders[0]
 
         return context
+
+
+    def get_tracking_summary(self, order_number: str = None, email: str = None) -> str:
+        """
+        Génère un résumé textuel du tracking pour l'IA
+        Remplace Parcelpanel en utilisant les données Shopify
+
+        Args:
+            order_number: Numéro de commande
+            email: Email du client
+
+        Returns:
+            Résumé formaté pour inclusion dans le prompt IA
+        """
+        context = self.get_order_context(order_number=order_number, email=email)
+
+        if not context.get('order'):
+            return "Aucune commande trouvée."
+
+        order = context['order']
+
+        # Traduction des statuts de livraison Shopify
+        shipment_status_map = {
+            'confirmed': 'Pris en charge par le transporteur',
+            'in_transit': 'En cours de livraison',
+            'out_for_delivery': 'En cours de livraison (jour même)',
+            'delivered': 'Livré',
+            'attempted_delivery': 'Tentative de livraison',
+            'ready_for_pickup': 'Prêt à retirer',
+            'picked_up': 'Retiré',
+            'failure': 'Problème de livraison',
+            'label_printed': 'Étiquette créée',
+            'label_purchased': 'Étiquette achetée'
+        }
+
+        summary_parts = [
+            f"📦 Commande #{order['order_number']}",
+            f"💰 Total: {order['total_price']} {order['currency']}",
+            f"📋 Statut: {order['fulfillment_status']}",
+        ]
+
+        if order.get('tracking_company'):
+            summary_parts.append(f"🚚 Transporteur: {order['tracking_company']}")
+
+        if order.get('tracking_number'):
+            summary_parts.append(f"📍 N° de suivi: {order['tracking_number']}")
+
+        if order.get('shipment_status'):
+            status_text = shipment_status_map.get(
+                order['shipment_status'],
+                order['shipment_status']
+            )
+            summary_parts.append(f"🔄 Statut livraison: {status_text}")
+
+        if order.get('shipped_at'):
+            try:
+                shipped_date = datetime.fromisoformat(order['shipped_at'].replace('Z', '+00:00'))
+                summary_parts.append(f"📅 Expédié le: {shipped_date.strftime('%d/%m/%Y')}")
+            except:
+                pass
+
+        if order.get('tracking_url'):
+            summary_parts.append(f"🔗 Suivi: {order['tracking_url']}")
+
+        # Infos produits
+        if order.get('line_items'):
+            products = [f"- {item['name']} (x{item['quantity']})" for item in order['line_items'][:3]]
+            summary_parts.append(f"📝 Articles:\n" + "\n".join(products))
+
+        return "\n".join(summary_parts)
 
 
 def test_shopify_connection(shop_name: str, access_token: str) -> Dict:
