@@ -68,10 +68,15 @@
                     Avena Paris SAV
                 </h1>
             </div>
-            <div class="flex items-center space-x-4">
+            <div class="flex items-center space-x-3">
                 <button onclick="fetchNewEmails()" id="refreshBtn" class="bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-lg flex items-center text-sm">
                     <i class="fas fa-sync-alt mr-2"></i>
                     Actualiser
+                </button>
+                <button onclick="classifyEmails()" id="classifyBtn" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg flex items-center text-sm">
+                    <i class="fas fa-brain mr-2"></i>
+                    Classifier
+                    <span id="classifyCount" class="ml-2 bg-white bg-opacity-30 px-2 py-0.5 rounded-full text-xs hidden">0</span>
                 </button>
                 <a href="/stores" class="text-gray-600 hover:text-gray-800 mr-2" title="Shops connectés">
                     <i class="fas fa-shopping-bag text-xl"></i>
@@ -971,7 +976,7 @@
             }
         }
 
-        // Fetch new emails
+        // Fetch new emails (SANS classification - juste récupération)
         async function fetchNewEmails() {
             const btn = document.getElementById('refreshBtn');
             btn.disabled = true;
@@ -985,7 +990,7 @@
                 if (data.success) {
                     showToast(data.message);
 
-                    // 2. Importe aussi nos réponses envoyées (en parallèle de la classification)
+                    // 2. Importe aussi nos réponses envoyées
                     btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Import réponses...';
                     try {
                         const sentRes = await fetch('/api/fetch-sent-emails', { method: 'POST' });
@@ -1000,10 +1005,8 @@
                     await loadEmails();
                     loadStats();
 
-                    // 3. Lance la classification automatique si des emails sont en attente
-                    if (data.to_classify > 0) {
-                        classifyEmailsProgressively();
-                    }
+                    // Met à jour le compteur du bouton Classifier
+                    updateClassifyCount();
                 } else {
                     showToast(data.message, 'error');
                 }
@@ -1013,6 +1016,42 @@
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fas fa-sync-alt mr-2"></i>Actualiser';
             }
+        }
+
+        // Met à jour le compteur d'emails à classifier
+        function updateClassifyCount() {
+            // Compte les emails PENDING (non classifiés)
+            const pendingCount = allEmails.filter(e =>
+                e.category === 'PENDING' || !e.category ||
+                !['AUTO', 'MANUEL', 'SPAM'].includes(e.category)
+            ).length;
+
+            const countSpan = document.getElementById('classifyCount');
+            if (pendingCount > 0) {
+                countSpan.textContent = pendingCount;
+                countSpan.classList.remove('hidden');
+            } else {
+                countSpan.classList.add('hidden');
+            }
+        }
+
+        // Bouton Classifier - Lance la classification IA
+        async function classifyEmails() {
+            const btn = document.getElementById('classifyBtn');
+
+            // Compte les emails à classifier
+            const toClassify = allEmails.filter(e =>
+                e.category === 'PENDING' || !e.category ||
+                !['AUTO', 'MANUEL', 'SPAM'].includes(e.category)
+            ).length;
+
+            if (toClassify === 0) {
+                showToast('Aucun email à classifier', 'info');
+                return;
+            }
+
+            btn.disabled = true;
+            classifyEmailsProgressively();
         }
 
         // Fetch sent emails (réponses)
@@ -1044,12 +1083,12 @@
             if (isClassifying) return;  // Évite les doubles appels
             isClassifying = true;
 
-            const btn = document.getElementById('refreshBtn');
+            const btn = document.getElementById('classifyBtn');
             let classified = 0;
 
             try {
                 while (true) {
-                    btn.innerHTML = `<i class="fas fa-brain mr-2"></i>Classification ${classified + 1}...`;
+                    btn.innerHTML = `<i class="fas fa-brain mr-2"></i>${classified + 1}...`;
 
                     const res = await fetch('/api/classify-next', { method: 'POST' });
                     const data = await res.json();
@@ -1078,7 +1117,9 @@
                 showToast('Erreur lors de la classification', 'error');
             } finally {
                 isClassifying = false;
-                btn.innerHTML = '<i class="fas fa-sync-alt mr-2"></i>Actualiser';
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-brain mr-2"></i>Classifier';
+                document.getElementById('classifyCount').classList.add('hidden');
                 loadStats();
             }
         }
@@ -1088,11 +1129,8 @@
             loadStats();
             await loadEmails();
 
-            // Vérifie s'il y a des emails PENDING à classifier au chargement
-            const pendingCount = allEmails.filter(e => e.category === 'PENDING').length;
-            if (pendingCount > 0) {
-                classifyEmailsProgressively();
-            }
+            // Met à jour le compteur du bouton Classifier (mais ne lance PAS auto)
+            updateClassifyCount();
         });
     </script>
 </body>
