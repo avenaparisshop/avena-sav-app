@@ -856,6 +856,63 @@ def send_custom_response(email_id):
         }), 500
 
 
+@app.route('/api/parcelpanel/status', methods=['GET'])
+def parcelpanel_status():
+    """Verifie la configuration Parcelpanel pour tous les shops"""
+    parcelpanel_manager = get_parcelpanel_manager()
+
+    configured_shops = parcelpanel_manager.get_all_configured_shops()
+
+    # Liste des 7 shops attendus
+    expected_shops = [
+        'tgir1c-x2',  # FR
+        'qk16wv-2e',  # NL
+        'jl1brs-gp',  # ES
+        'pz5e9e-2e',  # IT
+        'u06wln-hf',  # DE
+        'xptmak-r7',  # PL
+        'fyh99s-h9'   # EN
+    ]
+
+    shop_status = {}
+    for shop in expected_shops:
+        shop_status[shop] = {
+            'configured': shop in configured_shops,
+            'handler': parcelpanel_manager.get_handler(shop) is not None
+        }
+
+    missing_shops = [s for s in expected_shops if s not in configured_shops]
+
+    return jsonify({
+        'success': len(missing_shops) == 0,
+        'configured_count': len(configured_shops),
+        'expected_count': len(expected_shops),
+        'configured_shops': configured_shops,
+        'missing_shops': missing_shops,
+        'shop_status': shop_status,
+        'message': f'{len(configured_shops)}/{len(expected_shops)} shops Parcelpanel configures'
+    })
+
+
+@app.route('/api/parcelpanel/test/<shop_name>', methods=['POST'])
+def test_parcelpanel_shop(shop_name):
+    """Teste la connexion Parcelpanel pour un shop specifique"""
+    parcelpanel_manager = get_parcelpanel_manager()
+    handler = parcelpanel_manager.get_handler(shop_name)
+
+    if not handler:
+        return jsonify({
+            'success': False,
+            'message': f'Shop {shop_name} non configure pour Parcelpanel'
+        })
+
+    # Test avec un appel API simple
+    result = test_parcelpanel_connection(handler.api_key)
+    result['shop'] = shop_name
+
+    return jsonify(result)
+
+
 @app.route('/api/stats', methods=['GET'])
 def get_stats():
     """RÃ©cupÃ¨re les statistiques"""
