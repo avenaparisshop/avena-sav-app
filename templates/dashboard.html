@@ -18,9 +18,15 @@
         @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
 
         /* Layout transitions */
-        .email-list-panel { transition: all 0.3s ease; }
-        .email-list-panel.collapsed { width: 320px !important; }
+        .email-list-panel { transition: all 0.3s ease; min-width: 400px; }
+        .email-list-panel.collapsed { min-width: 280px; width: 280px !important; }
         .email-list-panel.collapsed .email-item { padding: 8px 12px; }
+        .email-list-panel.collapsed .email-item .email-subject {
+            max-width: 180px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
         .email-detail-panel { transition: all 0.3s ease; }
         .email-detail-panel.expanded { flex: 1; }
 
@@ -270,7 +276,7 @@
             return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
         }
 
-        // Toggle compact mode
+        // Toggle compact mode - ne recharge PAS les emails pour éviter le bug de disparition
         function setCompactMode(compact) {
             isCompactMode = compact;
             const listPanel = document.getElementById('emailListPanel');
@@ -283,7 +289,26 @@
                 listPanel.classList.remove('collapsed');
                 detailPanel.classList.remove('expanded');
             }
-            loadEmails();
+            // Met à jour l'apparence de la sélection sans recharger
+            updateEmailListSelection();
+        }
+
+        // Met à jour visuellement la sélection dans la liste
+        function updateEmailListSelection() {
+            document.querySelectorAll('.email-item').forEach(item => {
+                const emailId = parseInt(item.getAttribute('onclick')?.match(/selectEmail\((\d+)\)/)?.[1]);
+                if (emailId === selectedEmailId) {
+                    item.classList.add('bg-pink-50', 'border-l-4', 'border-pink-500');
+                } else {
+                    item.classList.remove('bg-pink-50', 'border-l-4', 'border-pink-500');
+                }
+                // Applique le mode compact
+                if (isCompactMode) {
+                    item.classList.add('compact');
+                } else {
+                    item.classList.remove('compact');
+                }
+            });
         }
 
         // Sélectionner un email
@@ -390,7 +415,7 @@
             setCompactMode(false);
             document.getElementById('emailContent').classList.add('hidden');
             document.getElementById('noSelection').classList.remove('hidden');
-            loadEmails();
+            // Pas besoin de recharger, updateEmailListSelection a déjà mis à jour l'affichage
         }
 
         function escapeHtml(text) {
