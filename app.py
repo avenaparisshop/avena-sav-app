@@ -1301,6 +1301,53 @@ def enrich_emails_customer_info():
         }), 500
 
 
+@app.route('/api/debug/search-customer', methods=['POST'])
+def debug_search_customer():
+    """Debug: Teste la recherche d'un client dans tous les shops"""
+    try:
+        data = request.get_json() or {}
+        email = data.get('email', '')
+        name = data.get('name', '')
+
+        if not email and not name:
+            return jsonify({
+                'success': False,
+                'message': 'email ou name requis'
+            }), 400
+
+        results = {}
+        all_shops = ['tgir1c-x2', 'qk16wv-2e', 'jl1brs-gp', 'pz5e9e-2e', 'u06wln-hf', 'xptmak-r7', 'fyh99s-h9']
+
+        for shop_name in all_shops:
+            shopify = get_shopify_handler(shop_name)
+            if not shopify:
+                results[shop_name] = {'error': 'handler not available'}
+                continue
+
+            try:
+                result = shopify.find_customer_orders(email=email, name=name)
+                results[shop_name] = {
+                    'found': result['found'],
+                    'search_method': result.get('search_method'),
+                    'order_number': result.get('last_order_number'),
+                    'customer_email': result.get('customer', {}).get('email') if result.get('customer') else None
+                }
+            except Exception as e:
+                results[shop_name] = {'error': str(e)}
+
+        return jsonify({
+            'success': True,
+            'search_params': {'email': email, 'name': name},
+            'results': results
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        }), 500
+
+
 @app.route('/api/emails/<int:email_id>/unspam', methods=['POST'])
 def unspam_email(email_id):
     """Retire un email du spam (faux positif) et le remet en MANUEL
