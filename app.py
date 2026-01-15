@@ -535,13 +535,30 @@ def fetch_new_emails():
             # Definit la categorie et le statut selon le spam
             if is_spam:
                 category = 'SPAM'
+                confidence = spam_score
                 status = 'ignored'  # Auto-ignore
                 spam_count += 1
             else:
-                category = None
+                # Classification IA pour les non-spam
+                try:
+                    ai_responder = get_ai_responder()
+                    if ai_responder:
+                        category, confidence = ai_responder.classify_email(
+                            email_data.get('subject', ''),
+                            email_data.get('body', '')
+                        )
+                        logger.info(f"Email classifie par IA: {category} ({confidence:.0%})")
+                    else:
+                        category = 'AUTRE'
+                        confidence = 0.0
+                        logger.warning("AI Responder non disponible - categorie par defaut")
+                except Exception as e:
+                    logger.error(f"Erreur classification IA: {e}")
+                    category = 'AUTRE'
+                    confidence = 0.0
                 status = 'pending'
 
-            # Cree l'enregistrement avec detection spam
+            # Cree l'enregistrement avec detection spam ou classification IA
             email_record = Email(
                 message_id=email_data['message_id'],
                 sender_email=email_data['sender_email'],
@@ -550,7 +567,7 @@ def fetch_new_emails():
                 body=email_data['body'],
                 received_at=email_data.get('received_at'),
                 category=category,
-                confidence=spam_score if is_spam else None,
+                confidence=confidence,
                 order_number=email_data.get('order_number'),
                 generated_response=None,
                 status=status
@@ -577,6 +594,76 @@ def fetch_new_emails():
             'success': False,
             'message': f'Erreur: {str(e)}'
         }), 500
+
+
+@app.route('/api/reclassify-emails', methods=['POST'])
+def reclassify_all_emails():
+    """Reclassifie tous les emails en attente avec l'IA et le detecteur de spam"""
+    try:
+        from modules.spam_detector import detect_spam
+
+        # Recupere tous les emails pending sans categorie ou avec categorie AUTRE
+        emails_to_classify = Email.query.filter(
+            (Email.status == 'pending') |
+            (Email.category == None) |
+            (Email.category == 'AUTRE')
+        ).all()
+
+        logger.info(f"Reclassification de {len(emails_to_classify)} emails...")
+
+        reclassified = 0
+        spam_detected = 0
+
+        for email in emails_to_classify:
+            # D'abord verifier si c'est du spam
+            is_spam, spam_score, spam_reason = detect_spam(
+                email.sender_email or '',
+                email.sender_name or '',
+                email.subject or '',
+                email.body or ''
+            )
+
+            if is_spam:
+                email.category = 'SPAM'
+                email.confidence = spam_score
+                email.status = 'ignored'
+                spam_detected += 1
+                logger.info(f"Email {email.id} marque SPAM: {spam_reason}")
+            else:
+                # Classification IA
+                try:
+                    ai_responder = get_ai_responder()
+                    if ai_responder:
+                        category, confidence = ai_responder.classify_email(
+                            email.subject or '',
+                            email.body or ''
+                        )
+                        email.category = category
+                        email.confidence = confidence
+                        logger.info(f"Email {email.id} classifie: {category} ({confidence:.0%})")
+                except Exception as e:
+                    logger.error(f"Erreur classification email {email.id}: {e}")
+                    email.category = 'AUTRE'
+                    email.confidence = 0.0
+
+            reclassified += 1
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': f'{reclassified} emails reclassifies ({spam_detected} spam)',
+            'reclassified': reclassified,
+            'spam_detected': spam_detected
+        })
+
+    except Exception as e:
+        logger.error(f"Erreur reclassification: {e}")
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        }), 500
+
 
 @app.route('/api/emails/<int:email_id>/generate', methods=['POST'])
 def generate_email_response(email_id):
