@@ -73,10 +73,6 @@
                     <i class="fas fa-sync-alt mr-2"></i>
                     Actualiser
                 </button>
-                <button onclick="fetchSentEmails()" id="importSentBtn" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg flex items-center text-sm" title="Importer les réponses envoyées">
-                    <i class="fas fa-reply mr-2"></i>
-                    Importer réponses
-                </button>
                 <a href="/stores" class="text-gray-600 hover:text-gray-800 mr-2" title="Shops connectés">
                     <i class="fas fa-shopping-bag text-xl"></i>
                 </a>
@@ -889,15 +885,29 @@
             btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Récupération...';
 
             try {
+                // 1. Récupère les nouveaux emails
                 const res = await fetch('/api/fetch-emails', { method: 'POST' });
                 const data = await res.json();
 
                 if (data.success) {
                     showToast(data.message);
+
+                    // 2. Importe aussi nos réponses envoyées (en parallèle de la classification)
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Import réponses...';
+                    try {
+                        const sentRes = await fetch('/api/fetch-sent-emails', { method: 'POST' });
+                        const sentData = await sentRes.json();
+                        if (sentData.success && sentData.imported > 0) {
+                            showToast(`${sentData.imported} réponses importées`, 'info');
+                        }
+                    } catch (sentErr) {
+                        console.log('Erreur import réponses:', sentErr);
+                    }
+
                     await loadEmails();
                     loadStats();
 
-                    // Lance la classification automatique si des emails sont en attente
+                    // 3. Lance la classification automatique si des emails sont en attente
                     if (data.to_classify > 0) {
                         classifyEmailsProgressively();
                     }
