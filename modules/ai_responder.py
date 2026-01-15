@@ -168,51 +168,49 @@ class AIResponder:
 
     def classify_email(self, subject: str, body: str) -> Tuple[str, float]:
         """
-        Classifie un email SAV dans une catégorie
+        Classifie un email SAV en AUTO ou MANUEL
 
         Args:
             subject: Sujet de l'email
             body: Corps de l'email
 
         Returns:
-            Tuple (catégorie, score de confiance)
+            Tuple (catégorie AUTO ou MANUEL, score de confiance)
         """
         prompt = f"""Tu es un assistant spécialisé dans la classification des emails de service client pour Avena Paris, une boutique e-commerce de mode/beauté.
 
-Analyse cet email et classifie-le dans UNE des catégories suivantes :
+Analyse cet email et classifie-le dans UNE des 2 catégories suivantes :
 
-CATÉGORIES AUTO (l'IA peut répondre automatiquement) :
-- SUIVI : Demande de suivi de commande existante (où est ma commande, tracking, délai restant)
-- QUESTION_PRODUIT : Question sur les produits (taille, couleur, disponibilité, composition, conseils)
-- LIVRAISON : Question générale sur la livraison (délais moyens, transporteurs, zones de livraison)
+AUTO = L'IA peut répondre automatiquement. Exemples :
+- Demande de suivi de commande (où est ma commande, tracking, délai)
+- Question sur les produits (taille, couleur, disponibilité)
+- Question sur la livraison (délais, transporteurs)
+- Questions simples sur les politiques (retours, échanges)
 
-CATÉGORIES MANUELLES (nécessite validation humaine) :
-- RETOUR : Demande de retour, échange ou remboursement
-- PROBLEME : Problème avec un produit ou commande (défectueux, erreur, colis endommagé)
-- MODIFICATION : Demande de modification de commande (adresse, annulation, changement)
-- AUTRE : Autre type de demande (réclamation, partenariat, etc.)
+MANUEL = Nécessite une intervention humaine. Exemples :
+- Demande de retour ou remboursement
+- Problème avec un produit (défectueux, erreur, colis endommagé)
+- Modification de commande (adresse, annulation)
+- Réclamation, plainte
+- Cas complexes ou sensibles
 
 EMAIL À CLASSIFIER :
 Sujet : {subject}
 Corps : {body}
 
-Réponds UNIQUEMENT avec un JSON de cette forme :
-{{"category": "CATEGORIE", "confidence": 0.95, "reason": "courte explication", "auto_eligible": true}}
-
-Note: auto_eligible = true si c'est une catégorie AUTO et que l'IA peut répondre sans risque.
+Réponds UNIQUEMENT avec un JSON : {{"category": "AUTO", "confidence": 0.95}} ou {{"category": "MANUEL", "confidence": 0.95}}
 """
 
         try:
             response = self.client.messages.create(
                 model=self.model,
-                max_tokens=200,
+                max_tokens=100,
                 messages=[{"role": "user", "content": prompt}]
             )
 
             result_text = response.content[0].text.strip()
 
-            # Parse le JSON
-            # Nettoie si besoin (parfois Claude ajoute des backticks)
+            # Parse le JSON - nettoie si besoin
             if result_text.startswith("```"):
                 result_text = result_text.split("```")[1]
                 if result_text.startswith("json"):
@@ -220,23 +218,19 @@ Note: auto_eligible = true si c'est une catégorie AUTO et que l'IA peut répond
 
             result = json.loads(result_text)
 
-            category = result.get("category", "AUTRE").upper()
+            category = result.get("category", "MANUEL").upper()
             confidence = float(result.get("confidence", 0.5))
 
-            # Valide la catégorie
-            if category not in CATEGORIES:
-                # Mapping des anciennes catégories
-                if category == "QUESTION":
-                    category = "QUESTION_PRODUIT"
-                else:
-                    category = "AUTRE"
+            # Valide : seulement AUTO ou MANUEL
+            if category not in ['AUTO', 'MANUEL']:
+                category = 'MANUEL'  # Par défaut = validation humaine
 
             logger.info(f"Email classifié: {category} (confiance: {confidence})")
             return category, confidence
 
         except Exception as e:
             logger.error(f"Erreur classification: {e}")
-            return "AUTRE", 0.0
+            return "MANUEL", 0.0  # Par défaut = validation humaine
 
     def is_auto_eligible(self, category: str, confidence: float, order_context: Dict) -> Tuple[bool, str]:
         """

@@ -116,10 +116,10 @@
             <!-- 3 Boutons principaux de catégorie -->
             <div class="p-2 border-b bg-gray-50">
                 <div class="flex space-x-1">
-                    <button onclick="setMainFilter('MANUAL')" id="filterMANUAL"
+                    <button onclick="setMainFilter('MANUEL')" id="filterMANUEL"
                             class="filter-btn flex-1 py-2 px-2 rounded-lg text-xs font-medium transition-all btn-manual-active">
                         <i class="fas fa-user mr-1"></i>MANUEL
-                        <span id="countMANUAL" class="ml-1 bg-white bg-opacity-30 px-1.5 py-0.5 rounded-full text-xs">0</span>
+                        <span id="countMANUEL" class="ml-1 bg-white bg-opacity-30 px-1.5 py-0.5 rounded-full text-xs">0</span>
                     </button>
                     <button onclick="setMainFilter('AUTO')" id="filterAUTO"
                             class="filter-btn flex-1 py-2 px-2 rounded-lg text-xs font-medium transition-all btn-inactive">
@@ -195,14 +195,16 @@
         let currentEmails = [];
         let allEmails = [];  // Tous les emails non filtrés
         let isCompactMode = false;
-        let currentMainFilter = 'MANUAL';  // MANUAL, AUTO, SPAM
+        let currentMainFilter = 'MANUEL';  // MANUEL, AUTO, SPAM
         let currentStatusFilter = 'pending';  // pending, sent, ignored, all
 
-        // Catégories AUTO (réponse automatique possible)
-        const autoCategories = ['SUIVI', 'QUESTION_PRODUIT', 'LIVRAISON'];
-
+        // 3 catégories simples : AUTO, MANUEL, SPAM
         // Catégories et couleurs
         const categoryColors = {
+            'AUTO': 'bg-green-100 text-green-800',
+            'MANUEL': 'bg-orange-100 text-orange-800',
+            'SPAM': 'bg-gray-400 text-white',
+            // Anciennes catégories pour compatibilité (emails existants)
             'SUIVI': 'bg-green-100 text-green-800',
             'QUESTION_PRODUIT': 'bg-green-100 text-green-800',
             'LIVRAISON': 'bg-green-100 text-green-800',
@@ -239,7 +241,7 @@
             const activeBtn = document.getElementById('filter' + filter);
             if (activeBtn) {
                 activeBtn.classList.remove('btn-inactive');
-                if (filter === 'MANUAL') activeBtn.classList.add('btn-manual-active');
+                if (filter === 'MANUEL') activeBtn.classList.add('btn-manual-active');
                 else if (filter === 'AUTO') activeBtn.classList.add('btn-auto-active');
                 else if (filter === 'SPAM') activeBtn.classList.add('btn-spam-active');
             }
@@ -265,25 +267,29 @@
             loadEmails();
         }
 
-        // Classifie un email selon les 3 catégories principales
+        // Retourne la catégorie principale de l'email (AUTO, MANUEL, SPAM)
         function getEmailMainCategory(email) {
-            if (email.category === 'SPAM') return 'SPAM';
-            if (autoCategories.includes(email.category)) return 'AUTO';
-            return 'MANUAL';  // Tout le reste = validation humaine requise
+            const cat = email.category;
+            if (cat === 'SPAM') return 'SPAM';
+            if (cat === 'AUTO') return 'AUTO';
+            if (cat === 'MANUEL') return 'MANUEL';
+            // Anciennes catégories pour compatibilité
+            if (['SUIVI', 'QUESTION_PRODUIT', 'LIVRAISON'].includes(cat)) return 'AUTO';
+            return 'MANUEL';  // Tout le reste = validation humaine
         }
 
         // Met à jour les compteurs sur les boutons
         function updateFilterCounts() {
-            let countManual = 0, countAuto = 0, countSpam = 0;
+            let countManuel = 0, countAuto = 0, countSpam = 0;
 
             allEmails.forEach(email => {
                 const mainCat = getEmailMainCategory(email);
-                if (mainCat === 'MANUAL') countManual++;
+                if (mainCat === 'MANUEL') countManuel++;
                 else if (mainCat === 'AUTO') countAuto++;
                 else if (mainCat === 'SPAM') countSpam++;
             });
 
-            document.getElementById('countMANUAL').textContent = countManual;
+            document.getElementById('countMANUEL').textContent = countManuel;
             document.getElementById('countAUTO').textContent = countAuto;
             document.getElementById('countSPAM').textContent = countSpam;
         }
@@ -336,7 +342,7 @@
 
             if (filteredEmails.length === 0) {
                 const emptyMessages = {
-                    'MANUAL': 'Aucun email en attente de validation',
+                    'MANUEL': 'Aucun email en attente de validation',
                     'AUTO': 'Aucun email pour réponse automatique',
                     'SPAM': 'Aucun spam détecté'
                 };
