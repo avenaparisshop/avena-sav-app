@@ -481,8 +481,8 @@
 
             let result = cleanLines.join('\n').trim();
 
-            // Réduit les lignes vides multiples en une seule
-            result = result.replace(/\n{3,}/g, '\n\n');
+            // Réduit TOUTES les lignes vides multiples en UNE SEULE ligne vide
+            result = result.replace(/\n\s*\n/g, '\n');
 
             // Pour les messages envoyés par nous, enlève juste la signature finale si trop longue
             if (isSentByUs && result.length > 100) {
