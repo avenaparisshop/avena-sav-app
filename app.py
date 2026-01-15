@@ -1230,18 +1230,17 @@ def enrich_emails_customer_info():
         shops_not_found = 0
         search_failed = 0
 
-        # Liste de tous les shops
-        all_shops = ['tgir1c-x2', 'qk16wv-2e', 'jl1brs-gp', 'pz5e9e-2e', 'u06wln-hf', 'xptmak-r7', 'fyh99s-h9']
+        # Liste de tous les shops (IDs corrects vérifiés dans Shopify Admin)
+        all_shops = ['ajejh8-ms', 'tgir1c-x2', 'k8ejin-gc', 'z1w10j-ne', 'a6kcxh-0q', 'x1jxji-gh']
 
         # Mapping langue -> shop
         lang_to_shop = {
-            'fr': 'tgir1c-x2',
-            'nl': 'qk16wv-2e',
-            'es': 'jl1brs-gp',
-            'it': 'pz5e9e-2e',
-            'de': 'u06wln-hf',
-            'pl': 'xptmak-r7',
-            'en': 'fyh99s-h9'
+            'fr': 'ajejh8-ms',   # France - avenaparis.com
+            'es': 'tgir1c-x2',   # Espagne - avenaparis.es
+            'it': 'k8ejin-gc',   # Italie - avenaparis.it
+            'nl': 'z1w10j-ne',   # Pays-Bas - avenaparis.nl
+            'de': 'a6kcxh-0q',   # Allemagne - avenaparis.de
+            'en': 'x1jxji-gh'    # Anglais - avenaparis.shop
         }
 
         for email in emails:
@@ -1306,15 +1305,14 @@ def debug_shopify_status():
     """Debug: Vérifie quels shops Shopify ont des tokens configurés"""
     import json
 
-    all_shops = ['tgir1c-x2', 'qk16wv-2e', 'jl1brs-gp', 'pz5e9e-2e', 'u06wln-hf', 'xptmak-r7', 'fyh99s-h9']
+    all_shops = ['ajejh8-ms', 'tgir1c-x2', 'k8ejin-gc', 'z1w10j-ne', 'a6kcxh-0q', 'x1jxji-gh']
     shop_labels = {
-        'tgir1c-x2': 'FR (France)',
-        'qk16wv-2e': 'DE (Allemagne)',
-        'jl1brs-gp': 'IT (Italie)',
-        'pz5e9e-2e': 'ES (Espagne)',
-        'u06wln-hf': 'PT (Portugal)',
-        'xptmak-r7': 'PL (Pologne)',
-        'fyh99s-h9': 'NL (Pays-Bas)'
+        'ajejh8-ms': 'FR (France) - avenaparis.com',
+        'tgir1c-x2': 'ES (Espagne) - avenaparis.es',
+        'k8ejin-gc': 'IT (Italie) - avenaparis.it',
+        'z1w10j-ne': 'NL (Pays-Bas) - avenaparis.nl',
+        'a6kcxh-0q': 'DE (Allemagne) - avenaparis.de',
+        'x1jxji-gh': 'EN (Anglais) - avenaparis.shop'
     }
 
     # Vérifie SHOPIFY_CREDENTIALS
@@ -1365,7 +1363,7 @@ def debug_search_customer():
             }), 400
 
         results = {}
-        all_shops = ['tgir1c-x2', 'qk16wv-2e', 'jl1brs-gp', 'pz5e9e-2e', 'u06wln-hf', 'xptmak-r7', 'fyh99s-h9']
+        all_shops = ['ajejh8-ms', 'tgir1c-x2', 'k8ejin-gc', 'z1w10j-ne', 'a6kcxh-0q', 'x1jxji-gh']
 
         for shop_name in all_shops:
             shopify = get_shopify_handler(shop_name)
