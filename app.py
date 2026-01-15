@@ -494,9 +494,10 @@ def fetch_new_emails():
     try:
         handler = get_email_handler()
 
-        # Récupère les emails de tous les dossiers importants (INBOX + Archive)
+        # Récupère les emails de TOUS les dossiers importants
+        # INBOX, Archive, Newsletter, Notification (pas Spam/Courrier indésirable)
         new_emails = handler.fetch_emails_from_folders(
-            folders=["INBOX", "Archive"],
+            folders=["INBOX", "Archive", "Archiver", "Newsletter", "Notification"],
             limit=None
         )
 

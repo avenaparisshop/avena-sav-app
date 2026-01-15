@@ -208,20 +208,30 @@ class ZohoEmailHandler:
     def fetch_emails_from_folders(self, folders: List[str] = None, limit: int = None) -> List[Dict]:
         """Récupère les emails de plusieurs dossiers"""
         if folders is None:
-            folders = ["INBOX", "Archive"]
+            # Dossiers par défaut - inclut variantes FR/EN
+            folders = ["INBOX", "Archive", "Archiver", "Newsletter", "Notification"]
 
         all_emails = []
         seen_message_ids = set()
+        processed_folders = set()  # Pour éviter de traiter 2x le même dossier
 
         for folder in folders:
+            # Skip si déjà traité (variantes peuvent pointer vers le même dossier)
+            folder_lower = folder.lower()
+            if folder_lower in processed_folders:
+                continue
+
             try:
                 folder_emails = self.fetch_unread_emails(folder=folder, limit=limit)
-                for email_data in folder_emails:
-                    # Évite les doublons basés sur message_id
-                    if email_data['message_id'] not in seen_message_ids:
-                        seen_message_ids.add(email_data['message_id'])
-                        email_data['folder'] = folder
-                        all_emails.append(email_data)
+                if folder_emails:
+                    processed_folders.add(folder_lower)
+                    for email_data in folder_emails:
+                        # Évite les doublons basés sur message_id
+                        if email_data['message_id'] not in seen_message_ids:
+                            seen_message_ids.add(email_data['message_id'])
+                            email_data['folder'] = folder
+                            all_emails.append(email_data)
+                    logger.info(f"Dossier {folder}: {len(folder_emails)} emails récupérés")
             except Exception as e:
                 logger.error(f"Erreur récupération dossier {folder}: {e}")
                 continue
