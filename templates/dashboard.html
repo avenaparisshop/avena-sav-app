@@ -421,6 +421,64 @@
             return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
         }
 
+        // Nettoyer le corps d'un email (supprime citations, signatures, historique)
+        function cleanEmailBody(body) {
+            if (!body) return '';
+
+            let lines = body.split('\n');
+            let cleanLines = [];
+
+            for (let i = 0; i < lines.length; i++) {
+                let line = lines[i];
+                let trimmedLine = line.trim();
+
+                // Détecte le début d'une citation / historique - STOP immédiatement
+                if (trimmedLine.match(/^-{3,}/) ||           // Ligne de tirets -------
+                    trimmedLine.match(/^_{3,}/) ||           // Ligne de underscores ____
+                    trimmedLine.match(/^De\s*:\s*.+@/i) ||   // De: quelqu'un@email.com
+                    trimmedLine.match(/^From\s*:\s*.+@/i) || // From: someone@email.com
+                    trimmedLine.match(/^Envoyé\s*:/i) ||     // Envoyé: date
+                    trimmedLine.match(/^Sent\s*:/i) ||       // Sent: date
+                    trimmedLine.match(/^À\s*:\s*.+@/i) ||    // À: destinataire
+                    trimmedLine.match(/^To\s*:\s*.+@/i) ||   // To: recipient
+                    trimmedLine.match(/^Objet\s*:/i) ||      // Objet: sujet
+                    trimmedLine.match(/^Subject\s*:/i) ||    // Subject: subject
+                    trimmedLine.match(/^Date\s*:/i) ||       // Date:
+                    trimmedLine.match(/a écrit\s*:?\s*$/i) || // ... a écrit:
+                    trimmedLine.match(/wrote\s*:?\s*$/i) ||   // ... wrote:
+                    trimmedLine.match(/^Le\s+\d+.*a écrit/i) || // Le 18 août ... a écrit
+                    trimmedLine.match(/^On\s+.+wrote/i)) {   // On Mon, ... wrote
+                    break; // Stop dès qu'on trouve une citation
+                }
+
+                // Ignore les lignes citées (commençant par >)
+                if (trimmedLine.startsWith('>')) {
+                    continue;
+                }
+
+                // Détecte les signatures - stop aussi
+                if (trimmedLine.match(/^(Cordialement|Bien à vous|Cdlt|Best regards|Kind regards|Sent from my|Envoyé depuis mon)/i)) {
+                    // Ajoute la signature et stop
+                    cleanLines.push(line);
+                    break;
+                }
+
+                cleanLines.push(line);
+            }
+
+            // Nettoie les lignes vides en fin
+            while (cleanLines.length > 0 && cleanLines[cleanLines.length - 1].trim() === '') {
+                cleanLines.pop();
+            }
+
+            // Nettoie les lignes vides en début
+            while (cleanLines.length > 0 && cleanLines[0].trim() === '') {
+                cleanLines.shift();
+            }
+
+            return cleanLines.join('\n').trim();
+        }
+
         // Toggle compact mode - ne recharge PAS les emails pour éviter le bug de disparition
         function setCompactMode(compact) {
             isCompactMode = compact;
@@ -474,23 +532,26 @@
                 const convData = await convRes.json();
 
                 if (convData.success && convData.conversation && convData.conversation.length >= 1) {
-                    // Style iMessage - bulles de conversation
+                    // Style iMessage - bulles de conversation avec contenu nettoyé
                     conversationHtml = `
                         <div class="p-4 bg-gray-100 min-h-96">
                             <div class="flex flex-col space-y-3">
                                 ${convData.conversation.map(msg => {
                                     const isSent = msg.type === 'sent';
+                                    const cleanBody = cleanEmailBody(msg.body || '');
+                                    // Skip les messages vides après nettoyage
+                                    if (!cleanBody.trim()) return '';
                                     return `
                                         <div class="flex ${isSent ? 'justify-end' : 'justify-start'}">
-                                            <div class="max-w-[75%] ${isSent ? 'order-2' : 'order-1'}">
-                                                <div class="px-4 py-3 rounded-2xl ${isSent
-                                                    ? 'bg-blue-500 text-white rounded-br-sm'
-                                                    : 'bg-gray-300 text-gray-800 rounded-bl-sm'}">
-                                                    <div class="text-sm whitespace-pre-wrap">${escapeHtml(msg.body || '')}</div>
+                                            <div class="max-w-[80%]">
+                                                <div class="px-4 py-2 rounded-2xl ${isSent
+                                                    ? 'bg-blue-500 text-white rounded-br-md'
+                                                    : 'bg-white text-gray-800 rounded-bl-md shadow-sm'}">
+                                                    <div class="text-sm whitespace-pre-wrap">${escapeHtml(cleanBody)}</div>
                                                 </div>
-                                                <div class="flex items-center mt-1 ${isSent ? 'justify-end' : 'justify-start'} px-2">
-                                                    <span class="text-xs text-gray-500">
-                                                        ${isSent ? 'Vous' : (msg.sender_name || 'Client')} - ${formatDate(msg.sent_at || msg.received_at)}
+                                                <div class="flex items-center mt-1 ${isSent ? 'justify-end' : 'justify-start'} px-1">
+                                                    <span class="text-xs text-gray-400">
+                                                        ${formatDate(msg.sent_at || msg.received_at)}
                                                     </span>
                                                 </div>
                                             </div>
