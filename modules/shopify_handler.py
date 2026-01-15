@@ -158,17 +158,42 @@ class ShopifyHandler:
 
         # Nettoie le nom
         name_clean = name.strip()
+        parts = name_clean.split()
 
-        # Recherche par nom complet
-        data = self._make_request(
-            "customers/search.json",
-            params={"query": name_clean}
-        )
+        # Liste des requêtes à essayer dans l'ordre
+        queries_to_try = []
 
-        if data and data.get('customers'):
-            # Prend le premier résultat
-            customer = data['customers'][0]
-            return self._format_customer(customer)
+        if len(parts) >= 2:
+            # Essayer prénom + nom séparément
+            first_name = parts[0]
+            last_name = " ".join(parts[1:])
+            # Format Shopify: first_name:X last_name:Y
+            queries_to_try.append(f"first_name:{first_name} last_name:{last_name}")
+            # Essayer aussi en inversé (parfois le nom est en premier)
+            queries_to_try.append(f"first_name:{last_name} last_name:{first_name}")
+            # Recherche par nom de famille seul
+            queries_to_try.append(f"last_name:{last_name}")
+            queries_to_try.append(f"last_name:{first_name}")
+        else:
+            # Un seul mot - chercher dans prénom et nom
+            queries_to_try.append(f"last_name:{name_clean}")
+            queries_to_try.append(f"first_name:{name_clean}")
+
+        # Ajouter aussi la recherche générique
+        queries_to_try.append(name_clean)
+
+        # Essayer chaque requête
+        for query in queries_to_try:
+            logger.info(f"Shopify search query: {query}")
+            data = self._make_request(
+                "customers/search.json",
+                params={"query": query}
+            )
+
+            if data and data.get('customers'):
+                customer = data['customers'][0]
+                logger.info(f"Found customer: {customer.get('first_name')} {customer.get('last_name')}")
+                return self._format_customer(customer)
 
         return None
 

@@ -1301,6 +1301,55 @@ def enrich_emails_customer_info():
         }), 500
 
 
+@app.route('/api/debug/shopify-status', methods=['GET'])
+def debug_shopify_status():
+    """Debug: Vérifie quels shops Shopify ont des tokens configurés"""
+    import json
+
+    all_shops = ['tgir1c-x2', 'qk16wv-2e', 'jl1brs-gp', 'pz5e9e-2e', 'u06wln-hf', 'xptmak-r7', 'fyh99s-h9']
+    shop_labels = {
+        'tgir1c-x2': 'FR (France)',
+        'qk16wv-2e': 'DE (Allemagne)',
+        'jl1brs-gp': 'IT (Italie)',
+        'pz5e9e-2e': 'ES (Espagne)',
+        'u06wln-hf': 'PT (Portugal)',
+        'xptmak-r7': 'PL (Pologne)',
+        'fyh99s-h9': 'NL (Pays-Bas)'
+    }
+
+    # Vérifie SHOPIFY_CREDENTIALS
+    credentials_json = os.getenv('SHOPIFY_CREDENTIALS', '{}')
+    try:
+        credentials = json.loads(credentials_json)
+        configured_shops = list(credentials.keys())
+    except:
+        configured_shops = []
+
+    # Vérifie les tokens en base
+    storage = get_token_storage_instance()
+    db_shops = storage.get_all_shops() if storage else {}
+
+    results = {}
+    for shop in all_shops:
+        has_env_token = shop in credentials
+        has_db_token = shop in db_shops
+        handler = get_shopify_handler(shop)
+
+        results[shop] = {
+            'label': shop_labels.get(shop, shop),
+            'env_token': has_env_token,
+            'db_token': has_db_token,
+            'handler_ok': handler is not None
+        }
+
+    return jsonify({
+        'success': True,
+        'shops': results,
+        'configured_in_env': configured_shops,
+        'configured_in_db': list(db_shops.keys())
+    })
+
+
 @app.route('/api/debug/search-customer', methods=['POST'])
 def debug_search_customer():
     """Debug: Teste la recherche d'un client dans tous les shops"""
