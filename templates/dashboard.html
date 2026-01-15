@@ -361,6 +361,28 @@
                 return getEmailMainCategory(email) === currentMainFilter;
             });
 
+            // Groupe les emails par sender_email (un seul contact par expéditeur)
+            // Garde l'email le plus récent pour chaque expéditeur
+            const emailsByContact = {};
+            filteredEmails.forEach(email => {
+                const contactKey = email.sender_email.toLowerCase();
+                if (!emailsByContact[contactKey]) {
+                    emailsByContact[contactKey] = email;
+                } else {
+                    // Garde le plus récent
+                    const existing = new Date(emailsByContact[contactKey].received_at);
+                    const current = new Date(email.received_at);
+                    if (current > existing) {
+                        emailsByContact[contactKey] = email;
+                    }
+                }
+            });
+
+            // Convertit en tableau trié par date (plus récent d'abord)
+            filteredEmails = Object.values(emailsByContact).sort((a, b) => {
+                return new Date(b.received_at) - new Date(a.received_at);
+            });
+
             currentEmails = filteredEmails;
 
             if (filteredEmails.length === 0) {
@@ -481,8 +503,8 @@
 
             let result = cleanLines.join('\n').trim();
 
-            // Réduit TOUTES les lignes vides multiples en UNE SEULE ligne vide
-            result = result.replace(/\n\s*\n/g, '\n');
+            // Réduit 3+ lignes vides consécutives en une seule ligne vide
+            result = result.replace(/\n{3,}/g, '\n\n');
 
             // Pour les messages envoyés par nous, enlève juste la signature finale si trop longue
             if (isSentByUs && result.length > 100) {
@@ -555,13 +577,16 @@
                                     const cleanBody = cleanEmailBody(msg.body || '', isSent);
                                     // Skip les messages vides après nettoyage
                                     if (!cleanBody.trim()) return '';
+                                    // Escape puis linkify les URLs
+                                    const escapedBody = escapeHtml(cleanBody);
+                                    const linkedBody = linkifyUrls(escapedBody, isSent);
                                     return `
                                         <div class="flex ${isSent ? 'justify-end' : 'justify-start'}">
                                             <div class="max-w-[80%]">
                                                 <div class="px-3 py-2 rounded-2xl ${isSent
                                                     ? 'bg-blue-500 text-white rounded-br-md'
                                                     : 'bg-white text-gray-800 rounded-bl-md shadow-sm'}">
-                                                    <div class="text-sm leading-snug">${escapeHtml(cleanBody).replace(/\n/g, '<br>')}</div>
+                                                    <div class="text-sm leading-snug">${linkedBody.replace(/\n/g, '<br>')}</div>
                                                 </div>
                                                 <div class="flex items-center mt-0.5 ${isSent ? 'justify-end' : 'justify-start'} px-1">
                                                     <span class="text-xs text-gray-400">
@@ -580,6 +605,10 @@
                 console.log('Pas d\'historique de conversation', e);
             }
 
+            // Détecte la langue de l'email
+            const emailLang = detectLanguage(email.body + ' ' + email.subject);
+            const langColor = languageColors[emailLang] || languageColors['FR'];
+
             document.getElementById('emailContent').innerHTML = `
                 <!-- Header avec bouton retour -->
                 <div class="p-4 border-b bg-gray-50 flex items-center justify-between">
@@ -590,6 +619,7 @@
                         <div>
                             <div class="flex items-center space-x-2">
                                 ${email.order_number ? `<span class="text-sm text-pink-500 font-medium">#${email.order_number}</span>` : ''}
+                                <span class="text-xs px-2 py-0.5 rounded-full font-medium ${langColor}">${emailLang}</span>
                                 ${!email.has_reply ? '<span class="w-2 h-2 bg-blue-500 rounded-full" title="Non répondu"></span>' : ''}
                             </div>
                             <p class="font-semibold text-gray-800 mt-1">${email.sender_name || 'Client'}</p>
@@ -755,6 +785,61 @@
             div.textContent = text;
             return div.innerHTML;
         }
+
+        // Convertit les URLs en liens cliquables (bleu)
+        function linkifyUrls(text, isBlueBackground = false) {
+            if (!text) return '';
+            // Regex pour détecter les URLs (avec ou sans < > autour)
+            const urlRegex = /<?(https?:\/\/[^\s<>]+)>?/g;
+            const linkClass = isBlueBackground
+                ? 'underline hover:opacity-80'
+                : 'text-blue-500 hover:text-blue-700 underline';
+            return text.replace(urlRegex, (match, url) => {
+                return `<a href="${url}" target="_blank" rel="noopener" class="${linkClass}">${url}</a>`;
+            });
+        }
+
+        // Détecte la langue d'un email basé sur son contenu
+        function detectLanguage(text) {
+            if (!text) return 'FR';
+            const lowerText = text.toLowerCase();
+
+            // Mots-clés par langue
+            const patterns = {
+                'IT': /\b(grazie|buongiorno|salve|ordine|spedizione|pacco|dove|quando|arriva|ricevuto|italiano)\b/i,
+                'ES': /\b(gracias|hola|buenos|pedido|envío|paquete|donde|cuando|llega|recibido|español)\b/i,
+                'DE': /\b(danke|guten|hallo|bestellung|lieferung|paket|wann|erhalten|deutsch|bitte|sehr)\b/i,
+                'NL': /\b(bedankt|hallo|goedendag|bestelling|verzending|pakket|wanneer|ontvangen|nederland)\b/i,
+                'PL': /\b(dziękuję|cześć|dzień|zamówienie|wysyłka|paczka|kiedy|otrzymałem|polski)\b/i,
+                'EN': /\b(thank|hello|order|shipping|package|where|when|received|please|delivery)\b/i
+            };
+
+            // Compte les correspondances pour chaque langue
+            let maxScore = 0;
+            let detectedLang = 'FR';
+
+            for (const [lang, regex] of Object.entries(patterns)) {
+                const matches = (lowerText.match(regex) || []).length;
+                if (matches > maxScore) {
+                    maxScore = matches;
+                    detectedLang = lang;
+                }
+            }
+
+            // Si aucun match significatif, assume français
+            return maxScore > 0 ? detectedLang : 'FR';
+        }
+
+        // Couleurs des badges de langue
+        const languageColors = {
+            'FR': 'bg-blue-100 text-blue-700',
+            'EN': 'bg-purple-100 text-purple-700',
+            'DE': 'bg-yellow-100 text-yellow-700',
+            'ES': 'bg-orange-100 text-orange-700',
+            'IT': 'bg-green-100 text-green-700',
+            'NL': 'bg-red-100 text-red-700',
+            'PL': 'bg-pink-100 text-pink-700'
+        };
 
         // Actions
         async function approveEmail(emailId) {
