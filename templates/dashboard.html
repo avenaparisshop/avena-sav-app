@@ -9,31 +9,49 @@
     <style>
         .email-item { transition: all 0.2s ease; }
         .email-item:hover { transform: translateX(4px); }
+        .email-item.compact .email-details { display: none; }
+        .email-item.compact .email-subject { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
         .category-badge { font-size: 0.7rem; padding: 2px 8px; border-radius: 9999px; }
-        .response-preview { max-height: 200px; overflow-y: auto; }
+        .response-preview { max-height: 300px; overflow-y: auto; }
         .loading { opacity: 0.6; pointer-events: none; }
         .toast { animation: slideIn 0.3s ease; }
         @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+
+        /* Layout transitions */
+        .email-list-panel { transition: all 0.3s ease; }
+        .email-list-panel.collapsed { width: 320px !important; }
+        .email-list-panel.collapsed .email-item { padding: 8px 12px; }
+        .email-detail-panel { transition: all 0.3s ease; }
+        .email-detail-panel.expanded { flex: 1; }
+
+        /* Scrollbar styling */
+        .email-list::-webkit-scrollbar { width: 6px; }
+        .email-list::-webkit-scrollbar-track { background: #f1f1f1; }
+        .email-list::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+        .email-list::-webkit-scrollbar-thumb:hover { background: #aaa; }
+
+        /* Email body styling */
+        .email-body-content { white-space: pre-wrap; line-height: 1.6; }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
     <!-- Header -->
     <header class="bg-white shadow-sm border-b">
-        <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+        <div class="max-w-full mx-auto px-4 py-3 flex items-center justify-between">
             <div class="flex items-center space-x-4">
-                <h1 class="text-2xl font-bold text-gray-800">
+                <h1 class="text-xl font-bold text-gray-800">
                     <i class="fas fa-headset text-pink-500 mr-2"></i>
                     Avena Paris SAV
                 </h1>
             </div>
             <div class="flex items-center space-x-4">
-                <button onclick="fetchNewEmails()" id="refreshBtn" class="bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-lg flex items-center">
+                <button onclick="fetchNewEmails()" id="refreshBtn" class="bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-lg flex items-center text-sm">
                     <i class="fas fa-sync-alt mr-2"></i>
                     Actualiser
                 </button>
-                                <a href="/stores" class="text-gray-600 hover:text-gray-800 mr-2" title="Shops connectes">
-                                                        <i class="fas fa-shopping-bag text-xl"></i>
-                                </a>
+                <a href="/stores" class="text-gray-600 hover:text-gray-800 mr-2" title="Shops connectés">
+                    <i class="fas fa-shopping-bag text-xl"></i>
+                </a>
                 <a href="/settings" class="text-gray-600 hover:text-gray-800">
                     <i class="fas fa-cog text-xl"></i>
                 </a>
@@ -41,68 +59,65 @@
         </div>
     </header>
 
-    <!-- Stats -->
-    <div class="max-w-7xl mx-auto px-4 py-6">
-        <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-            <div class="bg-white rounded-lg shadow p-4">
-                <div class="text-2xl font-bold text-yellow-500" id="stat-pending">-</div>
-                <div class="text-sm text-gray-500">En attente</div>
+    <!-- Stats (compact) -->
+    <div class="bg-white border-b px-4 py-2">
+        <div class="flex items-center space-x-6 text-sm">
+            <div class="flex items-center">
+                <span class="font-bold text-yellow-500 mr-1" id="stat-pending">-</span>
+                <span class="text-gray-500">En attente</span>
             </div>
-            <div class="bg-white rounded-lg shadow p-4">
-                <div class="text-2xl font-bold text-green-500" id="stat-sent">-</div>
-                <div class="text-sm text-gray-500">Envoyés</div>
+            <div class="flex items-center">
+                <span class="font-bold text-green-500 mr-1" id="stat-sent">-</span>
+                <span class="text-gray-500">Envoyés</span>
             </div>
-            <div class="bg-white rounded-lg shadow p-4">
-                <div class="text-2xl font-bold text-blue-500" id="stat-auto">-</div>
-                <div class="text-sm text-gray-500">Auto-envoyés</div>
+            <div class="flex items-center">
+                <span class="font-bold text-blue-500 mr-1" id="stat-auto">-</span>
+                <span class="text-gray-500">Auto</span>
             </div>
-            <div class="bg-white rounded-lg shadow p-4">
-                <div class="text-2xl font-bold text-gray-400" id="stat-ignored">-</div>
-                <div class="text-sm text-gray-500">Ignorés</div>
+            <div class="flex items-center">
+                <span class="font-bold text-gray-400 mr-1" id="stat-ignored">-</span>
+                <span class="text-gray-500">Ignorés</span>
             </div>
-            <div class="bg-white rounded-lg shadow p-4">
-                <div class="text-2xl font-bold text-gray-800" id="stat-total">-</div>
-                <div class="text-sm text-gray-500">Total</div>
+            <div class="flex items-center">
+                <span class="font-bold text-gray-800 mr-1" id="stat-total">-</span>
+                <span class="text-gray-500">Total</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content - Full height layout -->
+    <div class="flex" style="height: calc(100vh - 110px);">
+        <!-- Email List Panel -->
+        <div id="emailListPanel" class="email-list-panel bg-white border-r flex flex-col" style="width: 400px;">
+            <div class="p-3 border-b flex items-center justify-between bg-gray-50">
+                <h2 class="font-semibold text-gray-700 text-sm">
+                    <i class="fas fa-inbox mr-2"></i>Emails
+                </h2>
+                <select id="statusFilter" onchange="loadEmails()" class="border rounded px-2 py-1 text-xs">
+                    <option value="pending">En attente</option>
+                    <option value="sent">Envoyés</option>
+                    <option value="ignored">Ignorés</option>
+                    <option value="all">Tous</option>
+                </select>
+            </div>
+            <div id="emailList" class="email-list flex-1 overflow-y-auto">
+                <div class="p-8 text-center text-gray-400">
+                    <i class="fas fa-spinner fa-spin text-2xl"></i>
+                    <p class="mt-2">Chargement...</p>
+                </div>
             </div>
         </div>
 
-        <!-- Main Content -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <!-- Email List -->
-            <div class="bg-white rounded-lg shadow">
-                <div class="p-4 border-b flex items-center justify-between">
-                    <h2 class="font-semibold text-gray-700">
-                        <i class="fas fa-inbox mr-2"></i>Emails
-                    </h2>
-                    <select id="statusFilter" onchange="loadEmails()" class="border rounded px-3 py-1 text-sm">
-                        <option value="pending">En attente</option>
-                        <option value="sent">Envoyés</option>
-                        <option value="ignored">Ignorés</option>
-                        <option value="all">Tous</option>
-                    </select>
-                </div>
-                <div id="emailList" class="divide-y max-h-96 overflow-y-auto">
-                    <div class="p-8 text-center text-gray-400">
-                        <i class="fas fa-spinner fa-spin text-2xl"></i>
-                        <p class="mt-2">Chargement...</p>
-                    </div>
+        <!-- Email Detail Panel -->
+        <div id="emailDetailPanel" class="email-detail-panel flex-1 bg-white flex flex-col overflow-hidden">
+            <div id="noSelection" class="flex-1 flex items-center justify-center text-gray-400">
+                <div class="text-center">
+                    <i class="fas fa-envelope-open text-6xl mb-4"></i>
+                    <p class="text-lg">Sélectionnez un email pour voir les détails</p>
                 </div>
             </div>
-
-            <!-- Email Detail -->
-            <div class="bg-white rounded-lg shadow" id="emailDetail">
-                <div class="p-4 border-b">
-                    <h2 class="font-semibold text-gray-700">
-                        <i class="fas fa-envelope-open mr-2"></i>Détail
-                    </h2>
-                </div>
-                <div class="p-6 text-center text-gray-400" id="noSelection">
-                    <i class="fas fa-hand-pointer text-4xl mb-4"></i>
-                    <p>Sélectionnez un email pour voir les détails</p>
-                </div>
-                <div id="emailContent" class="hidden">
-                    <!-- Rempli dynamiquement -->
-                </div>
+            <div id="emailContent" class="hidden flex-1 flex flex-col overflow-hidden">
+                <!-- Filled dynamically -->
             </div>
         </div>
     </div>
@@ -112,7 +127,7 @@
 
     <!-- Response Edit Modal -->
     <div id="editModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-40 flex items-center justify-center">
-        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-screen overflow-y-auto">
+        <div class="bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-screen overflow-y-auto">
             <div class="p-4 border-b flex items-center justify-between">
                 <h3 class="font-semibold">Modifier la réponse</h3>
                 <button onclick="closeEditModal()" class="text-gray-400 hover:text-gray-600">
@@ -120,7 +135,7 @@
                 </button>
             </div>
             <div class="p-4">
-                <textarea id="editResponseText" class="w-full h-64 border rounded-lg p-3 text-sm" placeholder="Réponse..."></textarea>
+                <textarea id="editResponseText" class="w-full h-80 border rounded-lg p-3 text-sm" placeholder="Réponse..."></textarea>
             </div>
             <div class="p-4 border-t flex justify-end space-x-3">
                 <button onclick="closeEditModal()" class="px-4 py-2 border rounded-lg hover:bg-gray-50">
@@ -136,6 +151,7 @@
     <script>
         let selectedEmailId = null;
         let currentEmails = [];
+        let isCompactMode = false;
 
         // Catégories et couleurs
         const categoryColors = {
@@ -214,7 +230,7 @@
                     }
 
                     list.innerHTML = data.emails.map(email => `
-                        <div class="email-item p-4 cursor-pointer hover:bg-gray-50 ${selectedEmailId === email.id ? 'bg-pink-50 border-l-4 border-pink-500' : ''}"
+                        <div class="email-item p-3 cursor-pointer hover:bg-gray-50 border-b ${selectedEmailId === email.id ? 'bg-pink-50 border-l-4 border-pink-500' : ''} ${isCompactMode ? 'compact' : ''}"
                              onclick="selectEmail(${email.id})">
                             <div class="flex items-start justify-between">
                                 <div class="flex-1 min-w-0">
@@ -223,11 +239,12 @@
                                             ${categoryLabels[email.category] || 'Autre'}
                                         </span>
                                         ${email.order_number ? `<span class="text-xs text-gray-400">#${email.order_number}</span>` : ''}
+                                        ${!email.is_read ? '<span class="w-2 h-2 bg-blue-500 rounded-full"></span>' : ''}
                                     </div>
-                                    <p class="font-medium text-gray-800 truncate">${email.sender_name || email.sender_email}</p>
-                                    <p class="text-sm text-gray-500 truncate">${email.subject}</p>
+                                    <p class="font-medium text-gray-800 truncate text-sm">${email.sender_name || email.sender_email}</p>
+                                    <p class="email-subject text-xs text-gray-500 truncate">${email.subject}</p>
                                 </div>
-                                <div class="text-xs text-gray-400 ml-4 whitespace-nowrap">
+                                <div class="text-xs text-gray-400 ml-2 whitespace-nowrap">
                                     ${formatDate(email.received_at)}
                                 </div>
                             </div>
@@ -253,10 +270,26 @@
             return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
         }
 
+        // Toggle compact mode
+        function setCompactMode(compact) {
+            isCompactMode = compact;
+            const listPanel = document.getElementById('emailListPanel');
+            const detailPanel = document.getElementById('emailDetailPanel');
+
+            if (compact) {
+                listPanel.classList.add('collapsed');
+                detailPanel.classList.add('expanded');
+            } else {
+                listPanel.classList.remove('collapsed');
+                detailPanel.classList.remove('expanded');
+            }
+            loadEmails();
+        }
+
         // Sélectionner un email
         async function selectEmail(emailId) {
             selectedEmailId = emailId;
-            loadEmails(); // Refresh pour highlight
+            setCompactMode(true); // Réduit la liste quand un email est sélectionné
 
             const email = currentEmails.find(e => e.id === emailId);
             if (!email) return;
@@ -265,69 +298,83 @@
             document.getElementById('emailContent').classList.remove('hidden');
 
             document.getElementById('emailContent').innerHTML = `
-                <div class="p-4 border-b bg-gray-50">
-                    <div class="flex items-center justify-between mb-2">
-                        <span class="category-badge ${categoryColors[email.category] || categoryColors['AUTRE']}">
-                            ${categoryLabels[email.category] || 'Autre'}
-                        </span>
-                        <span class="text-sm text-gray-400">${formatDate(email.received_at)}</span>
+                <!-- Header avec bouton retour -->
+                <div class="p-4 border-b bg-gray-50 flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <button onclick="closeEmailDetail()" class="text-gray-500 hover:text-gray-700">
+                            <i class="fas fa-arrow-left text-lg"></i>
+                        </button>
+                        <div>
+                            <div class="flex items-center space-x-2">
+                                <span class="category-badge ${categoryColors[email.category] || categoryColors['AUTRE']}">
+                                    ${categoryLabels[email.category] || 'Autre'}
+                                </span>
+                                ${email.order_number ? `<span class="text-sm text-pink-500"><i class="fas fa-shopping-bag mr-1"></i>#${email.order_number}</span>` : ''}
+                            </div>
+                            <p class="font-semibold text-gray-800 mt-1">${email.sender_name || 'Client'}</p>
+                            <p class="text-sm text-gray-500">${email.sender_email}</p>
+                        </div>
                     </div>
-                    <p class="font-semibold text-gray-800">${email.sender_name || 'Client'}</p>
-                    <p class="text-sm text-gray-500">${email.sender_email}</p>
-                    ${email.order_number ? `<p class="text-sm text-pink-500 mt-1"><i class="fas fa-shopping-bag mr-1"></i>Commande #${email.order_number}</p>` : ''}
+                    <span class="text-sm text-gray-400">${formatDate(email.received_at)}</span>
                 </div>
 
-                <div class="p-4 border-b">
-                    <h4 class="font-medium text-gray-700 mb-2">
-                        <i class="fas fa-envelope mr-2"></i>Message du client
-                    </h4>
-                    <p class="text-sm font-medium text-gray-800 mb-2">${email.subject}</p>
-                    <div class="text-sm text-gray-600 bg-gray-50 p-3 rounded max-h-40 overflow-y-auto whitespace-pre-wrap">${escapeHtml(email.body)}</div>
-                </div>
-
-                <div class="p-4 border-b">
-                    <div class="flex items-center justify-between mb-2">
-                        <h4 class="font-medium text-gray-700">
-                            <i class="fas fa-robot mr-2"></i>Réponse IA
+                <!-- Contenu scrollable -->
+                <div class="flex-1 overflow-y-auto">
+                    <!-- Message du client -->
+                    <div class="p-4 border-b">
+                        <h4 class="font-medium text-gray-700 mb-3">
+                            <i class="fas fa-envelope mr-2"></i>Message du client
                         </h4>
+                        <p class="font-medium text-gray-800 mb-3">${email.subject}</p>
+                        <div class="email-body-content text-sm text-gray-700 bg-gray-50 p-4 rounded-lg">${escapeHtml(email.body)}</div>
+                    </div>
+
+                    <!-- Réponse IA -->
+                    <div class="p-4 border-b">
+                        <div class="flex items-center justify-between mb-3">
+                            <h4 class="font-medium text-gray-700">
+                                <i class="fas fa-robot mr-2"></i>Réponse IA
+                            </h4>
+                            ${email.generated_response ? `
+                            <button onclick="regenerateResponse(${email.id})" class="text-sm text-blue-500 hover:text-blue-700">
+                                <i class="fas fa-redo mr-1"></i>Régénérer
+                            </button>
+                            ` : ''}
+                        </div>
                         ${email.generated_response ? `
-                        <button onclick="regenerateResponse(${email.id})" class="text-sm text-blue-500 hover:text-blue-700">
-                            <i class="fas fa-redo mr-1"></i>Régénérer
-                        </button>
-                        ` : ''}
+                        <div class="response-preview text-sm bg-green-50 p-4 rounded-lg whitespace-pre-wrap">${escapeHtml(email.generated_response)}</div>
+                        ` : `
+                        <div class="text-center py-8">
+                            <p class="text-gray-400 mb-4">Aucune réponse générée</p>
+                            <button onclick="generateResponse(${email.id})" id="generateBtn-${email.id}" class="bg-purple-500 hover:bg-purple-600 text-white px-6 py-3 rounded-lg">
+                                <i class="fas fa-magic mr-2"></i>Générer une réponse IA
+                            </button>
+                        </div>
+                        `}
                     </div>
-                    ${email.generated_response ? `
-                    <div class="response-preview text-sm bg-green-50 p-3 rounded whitespace-pre-wrap">${escapeHtml(email.generated_response)}</div>
-                    ` : `
-                    <div class="text-center py-6">
-                        <p class="text-gray-400 mb-4">Aucune réponse générée</p>
-                        <button onclick="generateResponse(${email.id})" id="generateBtn-${email.id}" class="bg-purple-500 hover:bg-purple-600 text-white px-6 py-3 rounded-lg">
-                            <i class="fas fa-magic mr-2"></i>Générer une réponse IA
-                        </button>
-                    </div>
-                    `}
                 </div>
 
+                <!-- Actions fixes en bas -->
                 ${email.status === 'pending' && email.generated_response ? `
-                <div class="p-4 flex space-x-3">
-                    <button onclick="approveEmail(${email.id})" class="flex-1 bg-green-500 hover:bg-green-600 text-white py-2 rounded-lg">
+                <div class="p-4 border-t bg-gray-50 flex space-x-3">
+                    <button onclick="approveEmail(${email.id})" class="flex-1 bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg font-medium">
                         <i class="fas fa-check mr-2"></i>Approuver & Envoyer
                     </button>
-                    <button onclick="openEditModal(${email.id})" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-lg">
+                    <button onclick="openEditModal(${email.id})" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-lg font-medium">
                         <i class="fas fa-edit mr-2"></i>Modifier
                     </button>
-                    <button onclick="ignoreEmail(${email.id})" class="px-4 py-2 border border-gray-300 hover:bg-gray-50 rounded-lg">
+                    <button onclick="ignoreEmail(${email.id})" class="px-6 py-3 border border-gray-300 hover:bg-gray-100 rounded-lg">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
                 ` : email.status === 'pending' && !email.generated_response ? `
-                <div class="p-4 flex justify-center">
-                    <button onclick="ignoreEmail(${email.id})" class="px-6 py-2 border border-gray-300 hover:bg-gray-50 rounded-lg text-gray-600">
+                <div class="p-4 border-t bg-gray-50 flex justify-center">
+                    <button onclick="ignoreEmail(${email.id})" class="px-6 py-3 border border-gray-300 hover:bg-gray-100 rounded-lg text-gray-600">
                         <i class="fas fa-times mr-2"></i>Ignorer cet email
                     </button>
                 </div>
                 ` : `
-                <div class="p-4 text-center">
+                <div class="p-4 border-t bg-gray-50 text-center">
                     <span class="px-4 py-2 rounded-full ${email.status === 'sent' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}">
                         ${email.status === 'sent' ? '<i class="fas fa-check mr-2"></i>Envoyé' : '<i class="fas fa-ban mr-2"></i>Ignoré'}
                         ${email.auto_sent ? ' (auto)' : ''}
@@ -335,6 +382,15 @@
                 </div>
                 `}
             `;
+        }
+
+        // Fermer le détail email
+        function closeEmailDetail() {
+            selectedEmailId = null;
+            setCompactMode(false);
+            document.getElementById('emailContent').classList.add('hidden');
+            document.getElementById('noSelection').classList.remove('hidden');
+            loadEmails();
         }
 
         function escapeHtml(text) {
@@ -354,8 +410,7 @@
                     showToast(data.message);
                     loadEmails();
                     loadStats();
-                    document.getElementById('emailContent').classList.add('hidden');
-                    document.getElementById('noSelection').classList.remove('hidden');
+                    closeEmailDetail();
                 } else {
                     showToast(data.message, 'error');
                 }
@@ -373,8 +428,7 @@
                     showToast('Email ignoré');
                     loadEmails();
                     loadStats();
-                    document.getElementById('emailContent').classList.add('hidden');
-                    document.getElementById('noSelection').classList.remove('hidden');
+                    closeEmailDetail();
                 }
             } catch (e) {
                 showToast('Erreur', 'error');
@@ -389,7 +443,6 @@
 
                 if (data.success) {
                     showToast('Réponse régénérée');
-                    // Reload email list and re-select
                     await loadEmails();
                     selectEmail(emailId);
                 } else {
@@ -400,12 +453,11 @@
             }
         }
 
-        // Générer une réponse IA (appelé manuellement)
         async function generateResponse(emailId) {
             const btn = document.getElementById(`generateBtn-${emailId}`);
             if (btn) {
                 btn.disabled = true;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Génération en cours...';
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Génération...';
             }
 
             try {
@@ -414,8 +466,7 @@
                 const data = await res.json();
 
                 if (data.success) {
-                    showToast(`Réponse générée (${data.category || 'classifié'})`);
-                    // Reload email list and re-select
+                    showToast('Réponse générée');
                     await loadEmails();
                     selectEmail(emailId);
                 } else {
@@ -426,7 +477,7 @@
                     }
                 }
             } catch (e) {
-                showToast('Erreur de connexion', 'error');
+                showToast('Erreur lors de la génération', 'error');
                 if (btn) {
                     btn.disabled = false;
                     btn.innerHTML = '<i class="fas fa-magic mr-2"></i>Générer une réponse IA';
@@ -434,13 +485,14 @@
             }
         }
 
-        // Edit Modal
+        // Modal
         function openEditModal(emailId) {
             const email = currentEmails.find(e => e.id === emailId);
             if (!email) return;
 
             document.getElementById('editResponseText').value = email.generated_response || '';
             document.getElementById('editModal').classList.remove('hidden');
+            document.getElementById('editModal').dataset.emailId = emailId;
         }
 
         function closeEditModal() {
@@ -448,35 +500,35 @@
         }
 
         async function saveEditedResponse() {
-            const text = document.getElementById('editResponseText').value;
+            const emailId = document.getElementById('editModal').dataset.emailId;
+            const newResponse = document.getElementById('editResponseText').value;
 
             try {
-                const res = await fetch(`/api/emails/${selectedEmailId}/approve`, {
+                const res = await fetch(`/api/emails/${emailId}/send-custom`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ response: text })
+                    body: JSON.stringify({ response: newResponse })
                 });
                 const data = await res.json();
 
                 if (data.success) {
-                    showToast(data.message);
+                    showToast('Email envoyé');
                     closeEditModal();
                     loadEmails();
                     loadStats();
-                    document.getElementById('emailContent').classList.add('hidden');
-                    document.getElementById('noSelection').classList.remove('hidden');
+                    closeEmailDetail();
                 } else {
                     showToast(data.message, 'error');
                 }
             } catch (e) {
-                showToast('Erreur', 'error');
+                showToast('Erreur lors de l\'envoi', 'error');
             }
         }
 
         // Fetch new emails
         async function fetchNewEmails() {
             const btn = document.getElementById('refreshBtn');
-            btn.classList.add('loading');
+            btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Chargement...';
 
             try {
@@ -491,11 +543,11 @@
                     showToast(data.message, 'error');
                 }
             } catch (e) {
-                showToast('Erreur de connexion', 'error');
+                showToast('Erreur lors de l\'actualisation', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-sync-alt mr-2"></i>Actualiser';
             }
-
-            btn.classList.remove('loading');
-            btn.innerHTML = '<i class="fas fa-sync-alt mr-2"></i>Actualiser';
         }
 
         // Init

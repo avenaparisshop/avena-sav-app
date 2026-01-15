@@ -202,6 +202,7 @@ class ZohoEmailHandler:
                 return emails
 
             email_ids = messages[0].split()
+            logger.info(f"Nombre total d'emails trouvés dans {folder}: {len(email_ids)}")
 
             # Prend les emails les plus récents (applique une limite seulement si spécifiée)
             if limit is not None and len(email_ids) > limit:
