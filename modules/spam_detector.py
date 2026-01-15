@@ -21,6 +21,40 @@ SPAM_SENDER_PATTERNS = [
     r'@.*ksmg\.org',  # Domaine spam connu
     r'@.*thoimmo\.com',  # Domaine spam connu
     r'@ns\.',  # Sous-domaines ns suspects
+
+    # === DOMAINES SPAM EXTRAITS DE ZOHO (Courrier indésirable) ===
+    r'@.*\.edu\.pe$',       # Pérou - ayacucho.edu.pe
+    r'@.*\.edu\.mx$',       # Mexique - cobatlaxcala.edu.mx
+    r'@.*\.edu\.ag$',       # Antigua - jss.edu.ag
+    r'@.*\.ac\.th$',        # Thaïlande - banjong.ac.th
+    r'@.*\.ac\.tz$',        # Tanzanie - mustudent.ac.tz
+    r'@.*amcoedu\.org$',    # mx.amcoedu.org
+    r'@.*sell9proxy\.com$', # ns.sell9proxy.com
+    r'@.*bigblue\.io$',     # bigblue.io - démarchage
+    r'@.*medias-france\.fr$',  # medias-france.fr
+    r'@.*datanetsystemslimited\.co\.uk$',  # UK spam
+    r'@.*omnisend\.com$',   # omnisend.com - spam marketing
+    r'@mail\.ru$',          # mail.ru - spam russe
+
+    # === FAUX SUPPORT SHOPIFY (Gmail) ===
+    r'shopify.*@gmail\.com',           # shopifykelvinteam, shopifyappguide, etc.
+    r'info\.shopify.*@gmail\.com',     # info.shopifystoresb.co, etc.
+    r'contact\.shopify.*@gmail\.com',  # contact.shopifymailer
+    r'mailer\.shopify.*@gmail\.com',   # mailer.shopifycomplianceservice
+    r'support.*shopify.*@gmail\.com',  # support Shopify fake
+
+    # === GMAIL SUSPECTS (patterns de noms) ===
+    r'.*digital\d+@gmail\.com',        # horlarfydigital128, bastechdigital003
+    r'.*expert\d+@gmail\.com',         # bolajiexpert409
+    r'.*concept\d+@gmail\.com',        # elizabethconcept09
+    r'.*diamond\d+@gmail\.com',        # kennydiamond39
+    r'.*agency\d+@gmail\.com',         # wuraagency7
+    r'.*blessing@gmail\.com',          # ashiabyblessing
+    r'.*samson\d+@gmail\.com',         # danielsamson7654
+    r'.*zaid\d+@gmail\.com',           # aminahzaid670
+    r'.*millen\d+@gmail\.com',         # elisemillen5
+    r'.*delta@gmail\.com',             # monicaadelta
+    r'.*treasured\d+@gmail\.com',      # treasured399
 ]
 
 SPAM_SUBJECT_PATTERNS = [
@@ -66,6 +100,39 @@ SPAM_SUBJECT_PATTERNS = [
     r'inheritance',
     r'héritage',
     r'nigerian.*prince',
+
+    # === ARNAQUES SHOPIFY EN ITALIEN (extraites de Zoho) ===
+    r'problema.*di.*pagamento.*checkout',  # Problema di pagamento (checkout)
+    r'problemi.*di.*checkout',             # problemi di checkout Shopify
+    r'supporto.*urgente.*problemi',        # Supporto urgente: problemi
+    r'aggiornamento.*sul.*checkout',       # aggiornamento sul checkout
+    r'avviso.*di.*sicurezza',              # Avviso di Sicurezza
+    r'pagamenti.*di.*due.*clienti',        # pagamenti di due clienti bloccati
+    r'conformità.*alla.*licenza',          # conformità alla licenza proprietaria
+    r'problème.*lors.*du.*processus',      # FR: problème lors du processus de paiement
+
+    # === SUJETS VIDES OU GÉNÉRIQUES SUSPECTS ===
+    r'^aucun.*objet$',                     # (Aucun objet)
+    r'^hello$',                            # Juste "Hello"
+    r'^hola$',                             # Juste "Hola"
+    r'^hi$',                               # Juste "Hi"
+    r'^hey$',                              # Juste "Hey"
+    r'^avenaparis$',                       # Juste "Avenaparis"
+    r'^avena.*paris$',                     # Juste "Avena Paris"
+    r'^quick.*chat$',                      # Quick chat
+    r'^new.*message.*for',                 # New message for Avenaparis
+
+    # === DÉMARCHAGE / PROSPECTION ===
+    r'web.*design.*development.*services', # Web Design & Development Services
+    r'hire.*contemporary.*web',            # Hire Contemporary Web
+    r'dropshipping.*cost.*down',           # Dropshipping cost down
+    r'buyers.*decide.*trust',              # Buyers Decide Trust in Seconds
+    r'smart.*reviews.*start',              # Smart Reviews Start With
+    r'i\'ll.*rebuild.*it',                 # I'll Rebuild It
+    r'cannes.*connect',                    # Cannes&Connect
+    r'selection.*finale',                  # Sélection finale
+    r'how.*do.*you.*see.*this',            # How do you see this
+    r'i.*love.*your.*product',             # I love your product ❤
 
     # === DÉMARCHAGE COMMERCIAL NON SOLLICITÉ ===
     # Services B2B / Agences
