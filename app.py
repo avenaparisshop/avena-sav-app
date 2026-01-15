@@ -585,9 +585,10 @@ def fetch_new_emails():
         from modules.spam_detector import detect_spam
 
         # Recupere les emails - limite a 50 pour eviter les timeouts
+        # Inclut INBOX + Archive (Zoho déplace les emails répondus dans Archive)
         logger.info("Debut recuperation emails depuis IMAP...")
         new_emails = handler.fetch_emails_from_folders(
-            folders=["INBOX"],
+            folders=["INBOX", "Archive", "Archiver"],
             limit_per_folder=50
         )
         logger.info(f"Emails recuperes: {len(new_emails)}")
