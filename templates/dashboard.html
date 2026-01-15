@@ -171,6 +171,23 @@
     <!-- Toast Container -->
     <div id="toastContainer" class="fixed top-4 right-4 space-y-2 z-50"></div>
 
+    <!-- Context Menu (clic droit) -->
+    <div id="contextMenu" class="hidden fixed bg-white rounded-lg shadow-xl border z-50 py-1 min-w-[160px]">
+        <button onclick="setEmailCategory('AUTO')" class="w-full text-left px-4 py-2 hover:bg-green-50 text-sm flex items-center">
+            <i class="fas fa-robot text-green-500 mr-3 w-4"></i>
+            <span>Marquer AUTO</span>
+        </button>
+        <button onclick="setEmailCategory('SPAM')" class="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm flex items-center">
+            <i class="fas fa-ban text-gray-500 mr-3 w-4"></i>
+            <span>Marquer SPAM</span>
+        </button>
+        <div class="border-t my-1"></div>
+        <button onclick="setEmailCategory('MANUEL')" class="w-full text-left px-4 py-2 hover:bg-orange-50 text-sm flex items-center">
+            <i class="fas fa-user text-orange-500 mr-3 w-4"></i>
+            <span>Marquer MANUEL</span>
+        </button>
+    </div>
+
     <!-- Response Edit Modal -->
     <div id="editModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-40 flex items-center justify-center">
         <div class="bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-screen overflow-y-auto">
@@ -367,7 +384,8 @@
 
             list.innerHTML = filteredEmails.map(email => `
                 <div class="email-item p-3 cursor-pointer hover:bg-gray-50 border-b ${selectedEmailId === email.id ? 'bg-pink-50 border-l-4 border-pink-500' : ''} ${isCompactMode ? 'compact' : ''}"
-                     onclick="selectEmail(${email.id})">
+                     onclick="selectEmail(${email.id})"
+                     oncontextmenu="showContextMenu(event, ${email.id})">
                     <div class="flex items-start justify-between">
                         <div class="flex-1 min-w-0">
                             <div class="flex items-center space-x-2 mb-1">
@@ -660,6 +678,76 @@
             document.getElementById('emailContent').classList.add('hidden');
             document.getElementById('noSelection').classList.remove('hidden');
             // Pas besoin de recharger, updateEmailListSelection a déjà mis à jour l'affichage
+        }
+
+        // ========== CONTEXT MENU (clic droit) ==========
+        let contextMenuEmailId = null;
+
+        function showContextMenu(event, emailId) {
+            event.preventDefault();
+            contextMenuEmailId = emailId;
+
+            const menu = document.getElementById('contextMenu');
+            menu.classList.remove('hidden');
+
+            // Positionne le menu à la position du clic
+            let x = event.clientX;
+            let y = event.clientY;
+
+            // Vérifie que le menu ne dépasse pas de l'écran
+            const menuRect = menu.getBoundingClientRect();
+            if (x + 160 > window.innerWidth) {
+                x = window.innerWidth - 170;
+            }
+            if (y + 150 > window.innerHeight) {
+                y = window.innerHeight - 160;
+            }
+
+            menu.style.left = x + 'px';
+            menu.style.top = y + 'px';
+        }
+
+        function hideContextMenu() {
+            const menu = document.getElementById('contextMenu');
+            menu.classList.add('hidden');
+            contextMenuEmailId = null;
+        }
+
+        // Cache le menu quand on clique ailleurs
+        document.addEventListener('click', function(event) {
+            if (!event.target.closest('#contextMenu')) {
+                hideContextMenu();
+            }
+        });
+
+        // Cache le menu quand on scroll
+        document.addEventListener('scroll', hideContextMenu, true);
+
+        // Changer la catégorie d'un email
+        async function setEmailCategory(category) {
+            if (!contextMenuEmailId) return;
+
+            const emailId = contextMenuEmailId;
+            hideContextMenu();
+
+            try {
+                const res = await fetch(`/api/emails/${emailId}/category`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ category: category })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    showToast(`Email déplacé vers ${category}`);
+                    await loadEmails();
+                    updateFilterCounts();
+                } else {
+                    showToast(data.message || 'Erreur', 'error');
+                }
+            } catch (e) {
+                showToast('Erreur lors du changement de catégorie', 'error');
+            }
         }
 
         function escapeHtml(text) {

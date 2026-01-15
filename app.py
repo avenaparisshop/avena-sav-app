@@ -486,6 +486,48 @@ def ignore_email(email_id):
     })
 
 
+@app.route('/api/emails/<int:email_id>/category', methods=['POST'])
+def update_email_category(email_id):
+    """Change la catégorie d'un email (AUTO, MANUEL, SPAM)"""
+    email_record = Email.query.get_or_404(email_id)
+
+    data = request.get_json()
+    if not data or not data.get('category'):
+        return jsonify({
+            'success': False,
+            'message': 'Catégorie manquante'
+        }), 400
+
+    new_category = data['category'].upper()
+
+    # Valide la catégorie
+    valid_categories = ['AUTO', 'MANUEL', 'SPAM']
+    if new_category not in valid_categories:
+        return jsonify({
+            'success': False,
+            'message': f'Catégorie invalide. Valeurs acceptées: {", ".join(valid_categories)}'
+        }), 400
+
+    # Met à jour la catégorie
+    old_category = email_record.category
+    email_record.category = new_category
+
+    # Si marqué SPAM, on ignore automatiquement
+    if new_category == 'SPAM' and email_record.status == 'pending':
+        email_record.status = 'ignored'
+
+    db.session.commit()
+
+    logger.info(f"Email {email_id} catégorie changée: {old_category} -> {new_category}")
+
+    return jsonify({
+        'success': True,
+        'message': f'Email déplacé vers {new_category}',
+        'old_category': old_category,
+        'new_category': new_category
+    })
+
+
 @app.route('/api/emails/<int:email_id>/regenerate', methods=['POST'])
 def regenerate_response(email_id):
     """RÃ©gÃ©nÃ¨re la rÃ©ponse IA"""
