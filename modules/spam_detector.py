@@ -66,6 +66,93 @@ SPAM_SUBJECT_PATTERNS = [
     r'inheritance',
     r'héritage',
     r'nigerian.*prince',
+
+    # === DÉMARCHAGE COMMERCIAL NON SOLLICITÉ ===
+    # Services B2B / Agences
+    r'boost.*your.*business',
+    r'boost.*votre.*entreprise',
+    r'grow.*your.*business',
+    r'développ.*votre.*activité',
+    r'increase.*your.*sales',
+    r'augment.*vos.*ventes',
+    r'partnership.*opportunity',
+    r'opportunité.*partenariat',
+    r'collaboration.*proposal',
+    r'proposition.*collaboration',
+    r'business.*proposal',
+    r'proposition.*commerciale',
+    r'offer.*services',
+    r'propos.*services',
+    r'looking.*for.*partner',
+    r'recherch.*partenaire',
+
+    # SEO / Marketing digital
+    r'seo.*services',
+    r'référencement.*site',
+    r'rank.*google',
+    r'premier.*google',
+    r'améliorer.*visibilité',
+    r'improve.*visibility',
+    r'digital.*marketing',
+    r'marketing.*digital',
+    r'social.*media.*marketing',
+    r'community.*manager',
+    r'influencer.*marketing',
+    r'marketing.*influence',
+    r'lead.*generation',
+    r'génération.*leads',
+
+    # Développement web / Apps
+    r'website.*redesign',
+    r'refonte.*site',
+    r'mobile.*app.*develop',
+    r'développ.*application',
+    r'ecommerce.*solution',
+    r'solution.*ecommerce',
+    r'shopify.*expert',
+    r'expert.*shopify',
+
+    # Services financiers non sollicités
+    r'business.*loan',
+    r'prêt.*entreprise',
+    r'financement.*rapide',
+    r'quick.*funding',
+    r'merchant.*cash',
+    r'avance.*trésorerie',
+
+    # Sourcing / Fournisseurs
+    r'factory.*direct',
+    r'usine.*direct',
+    r'wholesale.*supplier',
+    r'fournisseur.*gros',
+    r'alibaba',
+    r'made.*in.*china',
+    r'manufacturer.*offer',
+    r'fabricant.*propos',
+    r'product.*sourcing',
+    r'sourcing.*produit',
+
+    # Recrutement non sollicité
+    r'outsourc.*team',
+    r'équipe.*offshore',
+    r'virtual.*assistant',
+    r'assistant.*virtuel',
+    r'hire.*developer',
+    r'recrut.*développeur',
+
+    # Invitations événements / webinars
+    r'exclusive.*invitation',
+    r'invitation.*exclusive',
+    r'webinar.*invitation',
+    r'invitation.*webinaire',
+    r'free.*consultation',
+    r'consultation.*gratuite',
+    r'free.*audit',
+    r'audit.*gratuit',
+    r'limited.*time.*offer',
+    r'offre.*limitée',
+    r'special.*discount',
+    r'réduction.*spéciale',
 ]
 
 SPAM_BODY_PATTERNS = [
@@ -86,24 +173,141 @@ SPAM_BODY_PATTERNS = [
     r'numéro.*carte',
     r'social.*security',
     r'numéro.*sécurité.*sociale',
+
+    # === DÉMARCHAGE COMMERCIAL (dans le corps) ===
+    r'i.*came.*across.*your.*website',
+    r'j.*ai.*découvert.*votre.*site',
+    r'i.*found.*your.*company',
+    r'j.*ai.*trouvé.*votre.*entreprise',
+    r'i.*am.*reaching.*out',
+    r'je.*me.*permets.*de.*vous.*contacter',
+    r'je.*vous.*contacte.*car',
+    r'we.*specialize.*in',
+    r'nous.*sommes.*spécialisés',
+    r'our.*agency',
+    r'notre.*agence',
+    r'our.*team.*can.*help',
+    r'notre.*équipe.*peut.*vous.*aider',
+    r'book.*a.*call',
+    r'réserv.*un.*appel',
+    r'schedule.*a.*meeting',
+    r'planifi.*une.*réunion',
+    r'let.*me.*know.*if.*interested',
+    r'dites.*moi.*si.*vous.*êtes.*intéressé',
+    r'would.*you.*be.*open.*to',
+    r'seriez.*vous.*ouvert.*à',
+    r'i.*would.*love.*to.*discuss',
+    r'j.*aimerais.*discuter',
+    r'quick.*question',
+    r'petite.*question',
+    r'shall.*i.*send.*more.*info',
+    r'puis.*je.*vous.*envoyer.*plus.*d.*info',
+    r'looking.*forward.*to.*your.*reply',
+    r'dans.*l.*attente.*de.*votre.*réponse',
+    r'best.*rates.*guarantee',
+    r'meilleurs.*tarifs',
+    r'increase.*traffic',
+    r'augmenter.*trafic',
+    r'boost.*conversions',
+    r'optimiser.*conversions',
+    r'roi.*guarantee',
+    r'garantie.*retour.*investissement',
+    r'free.*trial',
+    r'essai.*gratuit',
+    r'no.*obligation',
+    r'sans.*engagement',
 ]
 
 # Expéditeurs légitimes à ne jamais bloquer
+# IMPORTANT: Ces domaines sont vérifiés strictement - les emails de ces domaines
+# ne seront JAMAIS marqués comme spam
 WHITELIST_SENDERS = [
+    # === SHOPIFY (tous les domaines officiels) ===
     r'@shopify\.com$',
+    r'@shopifymail\.com$',
+    r'@shopifyemail\.com$',
     r'@shop\.app$',
+    r'@shops\.app$',
+    r'@myshopify\.com$',
+
+    # === META / FACEBOOK / INSTAGRAM (tous les domaines officiels) ===
+    r'@facebookmail\.com$',      # Notifications Facebook officielles
+    r'@facebook\.com$',
+    r'@fb\.com$',
+    r'@meta\.com$',
+    r'@metamail\.com$',
+    r'@instagram\.com$',
+    r'@mail\.instagram\.com$',
+    r'@business\.fb\.com$',
+    r'@support\.facebook\.com$',
+    r'@notification\.facebook\.com$',
+    r'@mediapartners\.facebook\.com$',
+
+    # === GOOGLE / YOUTUBE ===
+    r'@google\.com$',
+    r'@googlemail\.com$',
+    r'@youtube\.com$',
+    r'@accounts\.google\.com$',
+
+    # === TIKTOK (domaines officiels) ===
+    r'@tiktok\.com$',
+    r'@tiktokmail\.com$',
+    r'@bytedance\.com$',
+
+    # === MARKETING / CRM ===
     r'@klaviyo\.com$',
+    r'@klaviyomail\.com$',
     r'@mailchimp\.com$',
+    r'@mailchimpapp\.com$',
+    r'@sendinblue\.com$',
+    r'@brevo\.com$',
+    r'@hubspot\.com$',
+    r'@hubspotmail\.com$',
+
+    # === PAIEMENTS ===
     r'@stripe\.com$',
+    r'@stripemail\.com$',
     r'@paypal\.com$',
+    r'@paypal\.fr$',
+    r'@e\.paypal\.com$',
+    r'@e\.paypal\.fr$',
+    r'@mollie\.com$',
+    r'@alma\.eu$',
+
+    # === TRANSPORTEURS FRANCE ===
     r'@colissimo\.fr$',
     r'@laposte\.fr$',
+    r'@notification\.laposte\.fr$',
     r'@chronopost\.fr$',
-    r'@ups\.com$',
-    r'@dhl\.com$',
-    r'@fedex\.com$',
     r'@mondialrelay\.fr$',
-    r'@avena-paris\.com$',
+    r'@mondialrelay\.com$',
+    r'@relais-colis\.com$',
+    r'@gls-france\.com$',
+    r'@dpd\.fr$',
+
+    # === TRANSPORTEURS INTERNATIONAUX ===
+    r'@ups\.com$',
+    r'@upsemail\.com$',
+    r'@dhl\.com$',
+    r'@dhl\.fr$',
+    r'@fedex\.com$',
+    r'@track\.aftership\.com$',
+    r'@parcelpanel\.com$',
+    r'@17track\.net$',
+
+    # === E-COMMERCE / MARKETPLACES ===
+    r'@amazon\.fr$',
+    r'@amazon\.com$',
+    r'@marketplace\.amazon\.fr$',
+    r'@etsy\.com$',
+    r'@ebay\.fr$',
+    r'@ebay\.com$',
+
+    # === ZOHO (votre propre système) ===
+    r'@zoho\.com$',
+    r'@zohomail\.com$',
+
+    # === AVENA (votre domaine) ===
     r'@avenaparis\.com$',
 ]
 
