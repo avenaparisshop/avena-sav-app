@@ -998,6 +998,82 @@ def redetect_spam():
         }), 500
 
 
+@app.route('/api/move-spam-to-zoho', methods=['POST'])
+def move_spam_to_zoho():
+    """Déplace les emails détectés comme spam vers le dossier spam de Zoho
+
+    Les emails restent dans l'app (catégorie SPAM) pour vérifier les faux positifs,
+    mais sont aussi déplacés dans Zoho pour bloquer l'expéditeur.
+    """
+    try:
+        handler = get_email_handler()
+
+        # Récupère tous les emails SPAM qui n'ont pas encore été déplacés vers Zoho
+        spam_emails = Email.query.filter_by(category='SPAM').all()
+
+        if not spam_emails:
+            return jsonify({
+                'success': True,
+                'message': 'Aucun spam à déplacer',
+                'moved': 0
+            })
+
+        # Extrait les message_ids
+        message_ids = [e.message_id for e in spam_emails if e.message_id]
+
+        logger.info(f"Déplacement de {len(message_ids)} spams vers Zoho...")
+
+        # Déplace en batch
+        results = handler.move_emails_to_spam_batch(message_ids)
+
+        return jsonify({
+            'success': True,
+            'message': f"{results['success_count']} emails déplacés vers le spam Zoho",
+            'moved': results['success_count'],
+            'failed': results['failed_count'],
+            'total': len(message_ids)
+        })
+
+    except Exception as e:
+        logger.error(f"Erreur move spam to Zoho: {e}")
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        }), 500
+
+
+@app.route('/api/emails/<int:email_id>/unspam', methods=['POST'])
+def unspam_email(email_id):
+    """Retire un email du spam (faux positif) et le remet en MANUEL
+
+    Utilisé quand un vrai client a été marqué spam par erreur.
+    """
+    email_record = Email.query.get_or_404(email_id)
+
+    if email_record.category != 'SPAM':
+        return jsonify({
+            'success': False,
+            'message': 'Cet email n\'est pas dans la catégorie SPAM'
+        }), 400
+
+    old_category = email_record.category
+    email_record.category = 'MANUEL'
+    email_record.status = 'pending'  # Remet en attente pour traitement
+    email_record.confidence = 0.0
+
+    db.session.commit()
+
+    logger.info(f"Email {email_id} retiré du spam: {email_record.sender_email} - {email_record.subject[:50]}...")
+
+    return jsonify({
+        'success': True,
+        'message': f'Email retiré du spam et remis en MANUEL',
+        'old_category': old_category,
+        'new_category': 'MANUEL',
+        'email': email_record.to_dict()
+    })
+
+
 @app.route('/api/reclassify-emails', methods=['POST'])
 def reclassify_all_emails():
     """Reclassifie tous les emails en attente avec l'IA et le detecteur de spam"""

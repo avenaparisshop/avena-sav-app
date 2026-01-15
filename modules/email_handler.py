@@ -410,6 +410,110 @@ class ZohoEmailHandler:
             logger.error(f"Erreur envoi email: {e}")
             return False
 
+    def move_to_spam(self, message_id: str, source_folder: str = "INBOX") -> bool:
+        """Déplace un email vers le dossier spam de Zoho
+
+        Args:
+            message_id: L'ID unique du message (Message-ID header)
+            source_folder: Le dossier source (défaut INBOX)
+
+        Returns:
+            True si réussi, False sinon
+        """
+        if not self.imap_connection:
+            if not self.connect_imap():
+                return False
+
+        try:
+            # Dossiers spam possibles dans Zoho
+            spam_folders = ["Junk", "Spam", "Courrier indésirable", "Junk E-mail"]
+            target_folder = None
+
+            # Trouve le dossier spam qui existe
+            for folder in spam_folders:
+                try:
+                    status, _ = self.imap_connection.select(folder)
+                    if status == 'OK':
+                        target_folder = folder
+                        logger.info(f"Dossier spam trouvé: {folder}")
+                        break
+                except:
+                    continue
+
+            if not target_folder:
+                logger.warning("Aucun dossier spam trouvé sur Zoho")
+                return False
+
+            # Sélectionne le dossier source
+            status, _ = self.imap_connection.select(source_folder)
+            if status != 'OK':
+                logger.error(f"Impossible de sélectionner {source_folder}")
+                return False
+
+            # Cherche l'email par Message-ID
+            # Nettoie le message_id (enlève les < > si présents)
+            clean_message_id = message_id.strip('<>').strip()
+
+            # Recherche par header Message-ID
+            search_criteria = f'HEADER Message-ID "<{clean_message_id}>"'
+            status, messages = self.imap_connection.search(None, search_criteria)
+
+            if status != 'OK' or not messages[0]:
+                # Essaie sans les < >
+                search_criteria = f'HEADER Message-ID "{clean_message_id}"'
+                status, messages = self.imap_connection.search(None, search_criteria)
+
+            if status != 'OK' or not messages[0]:
+                logger.warning(f"Email non trouvé avec Message-ID: {message_id}")
+                return False
+
+            email_uid = messages[0].split()[0]
+
+            # Copie vers le dossier spam
+            status, _ = self.imap_connection.copy(email_uid, target_folder)
+            if status != 'OK':
+                logger.error(f"Erreur copie vers {target_folder}")
+                return False
+
+            # Marque l'original comme supprimé
+            self.imap_connection.store(email_uid, '+FLAGS', '\\Deleted')
+            self.imap_connection.expunge()
+
+            logger.info(f"Email {message_id[:30]}... déplacé vers {target_folder}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Erreur move_to_spam: {e}")
+            return False
+
+    def move_emails_to_spam_batch(self, message_ids: list, source_folder: str = "INBOX") -> dict:
+        """Déplace plusieurs emails vers le dossier spam
+
+        Args:
+            message_ids: Liste des Message-IDs à déplacer
+            source_folder: Le dossier source
+
+        Returns:
+            Dict avec success_count et failed_count
+        """
+        results = {'success_count': 0, 'failed_count': 0, 'failed_ids': []}
+
+        for msg_id in message_ids:
+            # Reconnecte pour chaque email pour éviter timeout
+            self.disconnect_imap()
+            if self.connect_imap():
+                if self.move_to_spam(msg_id, source_folder):
+                    results['success_count'] += 1
+                else:
+                    results['failed_count'] += 1
+                    results['failed_ids'].append(msg_id)
+            else:
+                results['failed_count'] += 1
+                results['failed_ids'].append(msg_id)
+
+        self.disconnect_imap()
+        return results
+
 
 # Fonction utilitaire pour tester la connexion
 def test_zoho_connection(email_address: str, password: str,

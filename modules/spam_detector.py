@@ -559,6 +559,78 @@ WHITELIST_SUBJECTS = [
     r'delivery.*confirmed',
 ]
 
+# === PATTERNS DE VRAIS CLIENTS ===
+# Ces phrases indiquent que quelqu'un parle de SA PROPRE commande = client légitime
+CLIENT_PATTERNS = [
+    # Références à une commande personnelle
+    r'ma\s*commande',                    # ma commande
+    r'mon\s*colis',                      # mon colis
+    r'mon\s*achat',                      # mon achat
+    r'my\s*order',                       # my order
+    r'my\s*package',                     # my package
+    r'mi\s*pedido',                      # mi pedido (ES)
+    r'mijn\s*bestelling',                # mijn bestelling (NL)
+    r'meine\s*bestellung',               # meine Bestellung (DE)
+    r'il\s*mio\s*ordine',                # il mio ordine (IT)
+
+    # Numéros de commande mentionnés
+    r'commande\s*n[°o]?\s*\d+',          # commande n°12345
+    r'order\s*n[°o]?\s*\d+',             # order n°12345
+    r'#\d{4,}',                          # #12345 (numéro de commande)
+    r'n°\s*\d{4,}',                      # n° 12345
+
+    # Questions sur leur commande
+    r'où\s*en\s*est\s*ma',               # où en est ma commande
+    r'where\s*is\s*my',                  # where is my order
+    r'quand\s*vais.*je\s*recevoir',      # quand vais-je recevoir
+    r'when\s*will\s*i\s*receive',        # when will I receive
+    r'pas\s*encore\s*reçu',              # pas encore reçu
+    r'not\s*yet\s*received',             # not yet received
+    r'toujours\s*pas\s*reçu',            # toujours pas reçu
+    r'still\s*waiting',                  # still waiting for
+    r'j\'attends',                       # j'attends ma commande
+    r'i\s*ordered',                      # I ordered
+    r'j\'ai\s*commandé',                 # j'ai commandé
+    r'j\'ai\s*passé\s*commande',         # j'ai passé commande
+
+    # Problèmes avec leur commande
+    r'article\s*manquant',               # article manquant
+    r'missing\s*item',                   # missing item
+    r'produit\s*défectueux',             # produit défectueux
+    r'defective\s*product',              # defective product
+    r'colis\s*endommagé',                # colis endommagé
+    r'package\s*damaged',                # package damaged
+    r'mauvaise\s*taille',                # mauvaise taille
+    r'wrong\s*size',                     # wrong size
+    r'erreur\s*dans\s*ma',               # erreur dans ma commande
+    r'error\s*in\s*my',                  # error in my order
+
+    # Retours et remboursements personnels
+    r'je\s*souhaite\s*retourner',        # je souhaite retourner
+    r'i\s*want\s*to\s*return',           # I want to return
+    r'je\s*voudrais\s*être\s*remboursé', # je voudrais être remboursé
+    r'i\s*would\s*like\s*a\s*refund',    # I would like a refund
+    r'demande\s*de\s*retour',            # demande de retour
+    r'return\s*request',                 # return request
+    r'échanger\s*mon',                   # échanger mon article
+    r'exchange\s*my',                    # exchange my item
+
+    # Suivi de leur commande
+    r'suivi\s*de\s*ma',                  # suivi de ma commande
+    r'tracking\s*(number|info)',         # tracking number/info
+    r'numéro\s*de\s*suivi',              # numéro de suivi
+    r'statut\s*de\s*ma',                 # statut de ma commande
+    r'status\s*of\s*my',                 # status of my order
+
+    # Modifications de leur commande
+    r'modifier\s*ma\s*commande',         # modifier ma commande
+    r'change\s*my\s*order',              # change my order
+    r'annuler\s*ma\s*commande',          # annuler ma commande
+    r'cancel\s*my\s*order',              # cancel my order
+    r'changer\s*l\'adresse',             # changer l'adresse de livraison
+    r'change\s*the\s*address',           # change the address
+]
+
 
 def is_whitelisted(sender_email: str, subject: str) -> bool:
     """Vérifie si l'email est dans la whitelist (ne jamais bloquer)"""
@@ -578,9 +650,36 @@ def is_whitelisted(sender_email: str, subject: str) -> bool:
     return False
 
 
+def is_real_client(subject: str, body: str) -> Tuple[bool, str]:
+    """
+    Vérifie si l'email provient d'un vrai client qui parle de SA commande.
+
+    LOGIQUE IMPORTANTE:
+    - Si quelqu'un pose des questions sur SA commande = vrai client
+    - Si quelqu'un propose d'apporter des commandes/ventes = démarcheur/spam
+
+    Returns:
+        Tuple (is_client, reason)
+    """
+    subject_lower = subject.lower() if subject else ''
+    body_lower = body.lower() if body else ''
+    full_text = f"{subject_lower} {body_lower}"
+
+    # Vérifie si l'email contient des patterns de vrai client
+    for pattern in CLIENT_PATTERNS:
+        if re.search(pattern, full_text, re.IGNORECASE):
+            return True, f"client_pattern:{pattern[:25]}"
+
+    return False, "no_client_pattern"
+
+
 def detect_spam(sender_email: str, sender_name: str, subject: str, body: str) -> Tuple[bool, float, str]:
     """
     Détecte si un email est du spam
+
+    LOGIQUE IMPORTANTE:
+    - Si quelqu'un pose des questions sur SA commande = vrai client (jamais spam)
+    - Si quelqu'un propose d'apporter des commandes/ventes = démarcheur/spam
 
     Returns:
         Tuple (is_spam, confidence, reason)
@@ -588,6 +687,13 @@ def detect_spam(sender_email: str, sender_name: str, subject: str, body: str) ->
     # D'abord vérifier la whitelist
     if is_whitelisted(sender_email, subject):
         return False, 0.0, "whitelisted"
+
+    # === VÉRIFICATION VRAI CLIENT ===
+    # Si l'email parle de SA propre commande, c'est un vrai client = jamais spam
+    is_client, client_reason = is_real_client(subject, body)
+    if is_client:
+        logger.info(f"VRAI CLIENT détecté: {sender_email} - {subject[:50]}... | Raison: {client_reason}")
+        return False, 0.0, f"real_client:{client_reason}"
 
     sender_lower = sender_email.lower() if sender_email else ''
     sender_name_lower = sender_name.lower() if sender_name else ''
