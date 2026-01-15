@@ -103,6 +103,25 @@ SPAM_SENDER_PATTERNS = [
     r'.*ceo.*@gmail\.com',             # ceoXXX
     r'.*boss.*@gmail\.com',            # bossXXX
     r'.*chief.*@gmail\.com',           # chiefXXX
+
+    # === GMAIL AVEC MOTS SUSPECTS ===
+    r'.*\.hello@gmail\.com',           # bassman.hello, etc. (format prénom.hello)
+    r'.*hello\..*@gmail\.com',         # hello.xxx@gmail.com
+    r'.*\.hi@gmail\.com',              # xxx.hi@gmail.com
+    r'.*contact\..*@gmail\.com',       # contact.xxx@gmail.com
+    r'.*info\..*@gmail\.com',          # info.xxx@gmail.com
+    r'.*support\..*@gmail\.com',       # support.xxx@gmail.com
+    r'.*sales\..*@gmail\.com',         # sales.xxx@gmail.com
+    r'.*marketing\..*@gmail\.com',     # marketing.xxx@gmail.com
+    r'.*business\..*@gmail\.com',      # business.xxx@gmail.com
+    r'.*official\..*@gmail\.com',      # official.xxx@gmail.com
+    r'.*team\..*@gmail\.com',          # team.xxx@gmail.com
+    r'.*service\..*@gmail\.com',       # service.xxx@gmail.com
+
+    # === GMAIL NOMS GÉNÉRIQUES SUSPECTS ===
+    r'graecemarry@gmail\.com',         # graecemarry - spammeur connu
+    r'.*marry\d*@gmail\.com',          # xxxmarry, marry123
+    r'.*grace\d*@gmail\.com',          # gracexxx (sans commande = suspect)
 ]
 
 SPAM_SUBJECT_PATTERNS = [
@@ -480,6 +499,73 @@ SPAM_BODY_PATTERNS = [
     r'awaiting.*your.*response',           # awaiting your response
     r'hope.*to.*hear.*from.*you',          # hope to hear from you
     r'looking.*forward.*to.*hearing',      # looking forward to hearing
+
+    # === DÉMARCHAGE SERVICES (freelancers, agences) ===
+    r'i.*specialize.*in',                  # I specialize in...
+    r'my.*name.*is.*and.*i',               # My name is X and I...
+    r'i.*am.*a.*freelance',                # I am a freelance...
+    r'i.*am.*a.*professional',             # I am a professional...
+    r'i.*offer.*my.*services',             # I offer my services
+    r'we.*offer.*our.*services',           # We offer our services
+    r'i.*can.*help.*you.*with',            # I can help you with
+    r'we.*can.*help.*you.*with',           # We can help you with
+    r'i.*noticed.*your.*store',            # I noticed your store
+    r'i.*noticed.*your.*website',          # I noticed your website
+    r'i.*came.*across.*your',              # I came across your store/website
+    r'i.*found.*your.*store',              # I found your store
+    r'i.*was.*browsing.*your',             # I was browsing your website
+    r'your.*store.*caught.*my',            # Your store caught my attention
+    r'i.*would.*like.*to.*offer',          # I would like to offer
+    r'we.*would.*like.*to.*offer',         # We would like to offer
+    r'i.*have.*experience.*in',            # I have experience in
+    r'years.*of.*experience',              # X years of experience
+    r'let.*me.*introduce.*myself',         # Let me introduce myself
+    r'allow.*me.*to.*introduce',           # Allow me to introduce
+    r'i.*am.*reaching.*out.*because',      # I am reaching out because
+    r'i.*am.*writing.*to.*you.*because',   # I am writing to you because
+    r'i.*wanted.*to.*reach.*out',          # I wanted to reach out
+    r'just.*wanted.*to.*reach.*out',       # Just wanted to reach out
+    r'reaching.*out.*to.*see.*if',         # Reaching out to see if
+    r'i.*have.*a.*proposal',               # I have a proposal
+    r'i.*have.*an.*idea',                  # I have an idea
+    r'i.*have.*a.*question.*for.*you',     # I have a question for you
+    r'quick.*question.*for.*you',          # Quick question for you
+    r'i.*have.*something.*interesting',    # I have something interesting
+    r'i.*think.*i.*can.*help',             # I think I can help
+    r'i.*believe.*i.*can.*help',           # I believe I can help
+    r'are.*you.*interested.*in',           # Are you interested in
+    r'would.*you.*be.*interested',         # Would you be interested
+    r'interested.*in.*working.*together',  # Interested in working together
+    r'let\'s.*work.*together',             # Let's work together
+    r'let\'s.*collaborate',                # Let's collaborate
+    r'open.*for.*collaboration',           # Open for collaboration
+    r'looking.*for.*collaboration',        # Looking for collaboration
+    r'partnership.*opportunity',           # Partnership opportunity
+    r'business.*opportunity',              # Business opportunity
+    r'exciting.*opportunity',              # Exciting opportunity
+    r'great.*opportunity',                 # Great opportunity
+    r'unique.*opportunity',                # Unique opportunity
+
+    # === SERVICES SPÉCIFIQUES SOUVENT PROPOSÉS PAR SPAM ===
+    r'video.*editing',                     # Video editing services
+    r'photo.*editing',                     # Photo editing
+    r'graphic.*design',                    # Graphic design
+    r'logo.*design',                       # Logo design
+    r'web.*design',                        # Web design
+    r'website.*design',                    # Website design
+    r'app.*development',                   # App development
+    r'mobile.*app',                        # Mobile app
+    r'seo.*service',                       # SEO services
+    r'social.*media.*management',          # Social media management
+    r'content.*creation',                  # Content creation
+    r'copywriting',                        # Copywriting
+    r'email.*marketing',                   # Email marketing
+    r'lead.*generation',                   # Lead generation
+    r'virtual.*assistant',                 # Virtual assistant
+    r'customer.*service.*support',         # Customer service support
+    r'data.*entry',                        # Data entry
+    r'bookkeeping',                        # Bookkeeping
+    r'accounting.*service',                # Accounting services
 ]
 
 # Expéditeurs légitimes à ne jamais bloquer
@@ -660,12 +746,12 @@ CLIENT_PATTERNS = [
 ]
 
 
-def is_fake_brand_email(sender_email: str, subject: str, sender_name: str) -> Tuple[bool, str]:
+def is_fake_brand_email(sender_email: str, subject: str, sender_name: str, body: str = "") -> Tuple[bool, str]:
     """
     Détecte si l'email se fait passer pour une marque connue (Shopify, Meta, Facebook, etc.)
     mais n'utilise pas le vrai domaine officiel.
 
-    RÈGLE: Si le sujet ou le nom de l'expéditeur mentionne Shopify/Meta/Facebook/etc.
+    RÈGLE: Si le sujet, le nom de l'expéditeur OU LE BODY mentionne Shopify/Meta/Facebook/etc.
     mais que le domaine email n'est PAS officiel = SPAM + BLOQUER
 
     Returns:
@@ -674,15 +760,17 @@ def is_fake_brand_email(sender_email: str, subject: str, sender_name: str) -> Tu
     sender_lower = sender_email.lower() if sender_email else ''
     subject_lower = subject.lower() if subject else ''
     name_lower = sender_name.lower() if sender_name else ''
-    full_text = f"{subject_lower} {name_lower}"
+    body_lower = body.lower() if body else ''
+    # Vérifie dans sujet, nom ET body
+    full_text = f"{subject_lower} {name_lower} {body_lower}"
 
     # Liste des marques à vérifier
     brand_keywords = {
-        'shopify': ['shopify', 'shop.app'],
-        'meta': ['meta business', 'meta ads', 'meta support'],
-        'facebook': ['facebook', 'fb ads', 'fb business'],
-        'instagram': ['instagram', 'ig business'],
-        'tiktok': ['tiktok', 'tik tok'],
+        'shopify': ['shopify', 'shop.app', 'your store', 'your shop', 'e-commerce store', 'ecommerce store'],
+        'meta': ['meta business', 'meta ads', 'meta support', 'meta platform'],
+        'facebook': ['facebook', 'fb ads', 'fb business', 'facebook page', 'facebook ads'],
+        'instagram': ['instagram', 'ig business', 'instagram account'],
+        'tiktok': ['tiktok', 'tik tok', 'tiktok shop'],
         'google': ['google ads', 'google business', 'google merchant'],
         'paypal': ['paypal'],
         'stripe': ['stripe'],
@@ -767,7 +855,8 @@ def detect_spam(sender_email: str, sender_name: str, subject: str, body: str) ->
 
     # === DÉTECTION FAUX EMAILS DE MARQUES (priorité haute) ===
     # Un email qui se fait passer pour Shopify/Meta/Facebook = TOUJOURS SPAM
-    is_fake, fake_brand = is_fake_brand_email(sender_email, subject, sender_name)
+    # Vérifie dans le sujet, le nom ET le body de l'email
+    is_fake, fake_brand = is_fake_brand_email(sender_email, subject, sender_name, body)
     if is_fake:
         logger.warning(f"FAUX {fake_brand.upper()} BLOQUÉ: {sender_email} - {subject[:50]}...")
         return True, 1.0, f"fake_brand:{fake_brand}"
