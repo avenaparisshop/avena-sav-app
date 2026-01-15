@@ -488,29 +488,50 @@ def regenerate_response(email_id):
     })
 
 
+
 @app.route('/api/fetch-emails', methods=['POST'])
 def fetch_new_emails():
-    """RÃ©cupÃ¨re les nouveaux emails depuis Zoho - SANS traitement IA"""
+    """Recupere les nouveaux emails depuis Zoho avec detection spam automatique"""
     try:
         handler = get_email_handler()
 
-        # Récupère les emails de TOUS les dossiers importants
-        # INBOX, Archive, Newsletter, Notification (pas Spam/Courrier indésirable)
-        # Limite à 500 emails par dossier pour éviter les timeouts IMAP
+        # Import du detecteur de spam
+        from modules.spam_detector import detect_spam
+
+        # Recupere les emails de TOUS les dossiers importants
+        # Limite a 500 emails par dossier pour eviter les timeouts IMAP
         new_emails = handler.fetch_emails_from_folders(
             folders=["INBOX", "Archive", "Archiver", "Newsletter", "Notification"],
             limit_per_folder=500
         )
 
         processed = 0
+        spam_count = 0
 
         for email_data in new_emails:
-            # VÃ©rifie si dÃ©jÃ  en base
+            # Verifie si deja en base
             existing = Email.query.filter_by(message_id=email_data['message_id']).first()
             if existing:
                 continue
 
-            # CrÃ©e l'enregistrement SANS traitement IA
+            # Detection automatique de spam
+            is_spam, spam_score, spam_reason = detect_spam(
+                email_data.get('sender_email', ''),
+                email_data.get('sender_name', ''),
+                email_data.get('subject', ''),
+                email_data.get('body', '')
+            )
+
+            # Definit la categorie et le statut selon le spam
+            if is_spam:
+                category = 'SPAM'
+                status = 'ignored'  # Auto-ignore
+                spam_count += 1
+            else:
+                category = None
+                status = 'pending'
+
+            # Cree l'enregistrement avec detection spam
             email_record = Email(
                 message_id=email_data['message_id'],
                 sender_email=email_data['sender_email'],
@@ -518,11 +539,11 @@ def fetch_new_emails():
                 subject=email_data['subject'],
                 body=email_data['body'],
                 received_at=email_data.get('received_at'),
-                category=None,  # Pas de classification automatique
-                confidence=None,
+                category=category,
+                confidence=spam_score if is_spam else None,
                 order_number=email_data.get('order_number'),
-                generated_response=None,  # Pas de rÃ©ponse gÃ©nÃ©rÃ©e
-                status='pending'
+                generated_response=None,
+                status=status
             )
 
             db.session.add(email_record)
@@ -533,8 +554,9 @@ def fetch_new_emails():
 
         return jsonify({
             'success': True,
-            'message': f'{processed} nouveaux emails rÃ©cupÃ©rÃ©s',
-            'processed': processed
+            'message': f'{processed} nouveaux emails ({spam_count} spam detectes)',
+            'processed': processed,
+            'spam_detected': spam_count
         })
 
     except Exception as e:
@@ -543,7 +565,6 @@ def fetch_new_emails():
             'success': False,
             'message': str(e)
         }), 500
-
 
 @app.route('/api/emails/<int:email_id>/generate', methods=['POST'])
 def generate_email_response(email_id):
