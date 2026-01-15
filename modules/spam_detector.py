@@ -121,6 +121,19 @@ SPAM_SUBJECT_PATTERNS = [
     r'^avena.*paris$',                     # Juste "Avena Paris"
     r'^quick.*chat$',                      # Quick chat
     r'^new.*message.*for',                 # New message for Avenaparis
+    r'^hello.*avenaparis',                 # Hello Avenaparis (Radex-style)
+    r'^hi.*avenaparis',                    # Hi Avenaparis
+    r'^hey.*avenaparis',                   # Hey Avenaparis
+    r'^\d+\s*new\s*order',                 # "1 NEW ORDER" - faux pattern de commande
+    r'^new\s*order$',                      # Juste "New order" sans numéro
+    r'^order\s*confirmation$',             # Faux "Order confirmation" générique
+
+    # === DÉMARCHAGE AVEC "IDÉE" / "IDEA" ===
+    r'id[ée]e.*rapide',                    # Idée rapide pour...
+    r'quick.*idea',                        # Quick idea for...
+    r'id[ée]e.*pour.*avena',               # Idée pour Avenaparis
+    r'idea.*for.*avena',                   # Idea for Avenaparis
+    r'thought.*for.*avena',                # Thought for Avenaparis
 
     # === DÉMARCHAGE / PROSPECTION ===
     r'web.*design.*development.*services', # Web Design & Development Services
@@ -557,13 +570,15 @@ def detect_spam(sender_email: str, sender_name: str, subject: str, body: str) ->
         # Noms génériques de démarcheurs
         'strategic', 'creative', 'agency', 'marketing', 'growth', 'partner',
         'influencer', 'ugc', 'ambassador', 'affiliate', 'expert', 'consultant',
-        'solutions', 'services', 'digital', 'media', 'studio', 'labs'
+        'solutions', 'services', 'digital', 'media', 'studio', 'labs',
+        # Noms suspects additionnels
+        'xpert', 'radex', 'boost', 'promo', 'offer', 'deal', 'sales'
     ]
     for word in suspicious_names:
         if word in sender_name_lower and not is_whitelisted(sender_email, subject):
             # Vérifie que ce n'est pas un vrai email officiel
             if not any(legit in sender_lower for legit in ['@facebook.com', '@meta.com', '@tiktok.com', '@instagram.com']):
-                spam_score += 0.15
+                spam_score += 0.35  # Augmenté de 0.15 à 0.35 pour mieux détecter
                 reasons.append(f"suspicious_name:{word}")
                 break
 
