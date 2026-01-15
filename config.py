@@ -12,7 +12,12 @@ class Config:
 
     # Flask
     SECRET_KEY = os.getenv('SECRET_KEY', 'dev-key-change-me')
-    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL', 'sqlite:///avena_sav.db')
+
+    # Database URL - Railway fournit postgres:// mais SQLAlchemy moderne requiert postgresql://
+    _database_url = os.getenv('DATABASE_URL', 'sqlite:///avena_sav.db')
+    if _database_url.startswith('postgres://'):
+        _database_url = _database_url.replace('postgres://', 'postgresql://', 1)
+    SQLALCHEMY_DATABASE_URI = _database_url
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     # Zoho Mail
