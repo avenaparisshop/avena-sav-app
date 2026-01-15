@@ -55,6 +55,26 @@ SPAM_SENDER_PATTERNS = [
     r'.*millen\d+@gmail\.com',         # elisemillen5
     r'.*delta@gmail\.com',             # monicaadelta
     r'.*treasured\d+@gmail\.com',      # treasured399
+
+    # === GMAIL DÉMARCHEURS AFRICAINS (patterns très courants) ===
+    r'[a-z]+\d{2,}@gmail\.com',        # prénom + 2+ chiffres: adeola07, sodiq7773, etc.
+    r'[a-z]+[a-z]+\d{1,}@gmail\.com',  # prénomnom + chiffres
+    r'.*praise.*@gmail\.com',          # ajaykopraise, praise, etc.
+    r'.*blessed.*@gmail\.com',         # braydenblessed, etc.
+    r'.*prince.*@gmail\.com',          # gideonprince, etc.
+    r'.*king.*@gmail\.com',            # kingXXX
+    r'.*lord.*@gmail\.com',            # lordXXX
+    r'.*star.*@gmail\.com',            # praisestar, allstar, etc.
+    r'.*smart.*@gmail\.com',           # smartXXX, ibsmart
+    r'.*tech.*@gmail\.com',            # techXXX
+    r'.*global.*@gmail\.com',          # globalXXX
+    r'.*world.*@gmail\.com',           # worldXXX
+    r'.*best.*@gmail\.com',            # bestXXX
+    r'.*top.*@gmail\.com',             # topXXX
+    r'.*pro\d*@gmail\.com',            # proXXX
+    r'.*ceo.*@gmail\.com',             # ceoXXX
+    r'.*boss.*@gmail\.com',            # bossXXX
+    r'.*chief.*@gmail\.com',           # chiefXXX
 ]
 
 SPAM_SUBJECT_PATTERNS = [
@@ -127,6 +147,24 @@ SPAM_SUBJECT_PATTERNS = [
     r'^\d+\s*new\s*order',                 # "1 NEW ORDER" - faux pattern de commande
     r'^new\s*order$',                      # Juste "New order" sans numéro
     r'^order\s*confirmation$',             # Faux "Order confirmation" générique
+    r'^greetings$',                        # Juste "GREETINGS"
+    r'^salut$',                            # Juste "Salut"
+    r'^salut.*avena',                      # Salut Avenaparis
+    r'^bonjour$',                          # Juste "Bonjour"
+    r'^important.*message$',               # "IMPORTANT MESSAGE"
+    r'^urgent$',                           # Juste "Urgent"
+    r'^urgent.*message',                   # Urgent message
+    r'^question$',                         # Juste "Question"
+    r'^quick.*question',                   # Quick question about...
+    r'^inquiry$',                          # Juste "Inquiry"
+    r'^request$',                          # Juste "Request"
+    r'^opportunity$',                      # Juste "Opportunity"
+    r'^proposal$',                         # Juste "Proposal"
+    r'^partnership$',                      # Juste "Partnership"
+    r'^collaboration$',                    # Juste "Collaboration"
+    r'is.*this.*your.*active',             # Is this your active business inbox
+    r'your.*active.*business',             # your active business
+    r'anyone.*here.*to.*attend',           # Hello anyone here to attend to me
 
     # === DÉMARCHAGE AVEC "IDÉE" / "IDEA" ===
     r'id[ée]e.*rapide',                    # Idée rapide pour...
@@ -390,6 +428,30 @@ SPAM_BODY_PATTERNS = [
     r'devenir.*distributeur',
     r'retail.*partnership',
     r'partenariat.*retail',
+
+    # === PHRASES DE DÉMARCHAGE TRÈS COURANTES ===
+    r'is.*your.*store.*live',              # Is your store live and making sales?
+    r'your.*store.*live.*and.*making',     # your store live and making sales
+    r'help.*you.*consistently.*generate',  # help you consistently generate
+    r'generate.*\d+.*sales.*per.*day',     # generate 25-30 sales per day
+    r'newly.*proven.*strategy',            # newly proven strategy
+    r'would.*you.*be.*open.*to.*learning', # Would you be open to learning
+    r'open.*to.*learning.*how',            # open to learning how it works
+    r'increase.*conversions',              # increase conversions
+    r'boost.*your.*sales',                 # boost your sales
+    r'grow.*your.*store',                  # grow your store
+    r'scale.*your.*business',              # scale your business
+    r'hello.*there',                       # Hello there! (démarchage)
+    r'hello.*anyone.*here',                # Hello anyone here to attend to me
+    r'anyone.*here.*to.*attend',           # anyone here to attend to me
+    r'attend.*to.*me',                     # attend to me
+    r'get.*back.*to.*me',                  # get back to me
+    r'let.*me.*know.*if.*you.*are',        # let me know if you are interested
+    r'kindly.*get.*back',                  # kindly get back to me
+    r'kindly.*reply',                      # kindly reply
+    r'awaiting.*your.*response',           # awaiting your response
+    r'hope.*to.*hear.*from.*you',          # hope to hear from you
+    r'looking.*forward.*to.*hearing',      # looking forward to hearing
 ]
 
 # Expéditeurs légitimes à ne jamais bloquer
@@ -582,11 +644,21 @@ def detect_spam(sender_email: str, sender_name: str, subject: str, body: str) ->
                 reasons.append(f"suspicious_name:{word}")
                 break
 
+    # === DÉTECTION GMAIL GÉNÉRIQUE NON-PROFESSIONNEL ===
+    # Les vrais clients utilisent rarement des adresses Gmail avec des patterns suspects
+    if '@gmail.com' in sender_lower:
+        # Vérifie si c'est un pattern de nom africain/démarcheur typique
+        gmail_name = sender_lower.split('@')[0]
+        # Pattern: prénom + chiffres ou prénom + mot + chiffres
+        if re.search(r'^[a-z]+\d{2,}$', gmail_name) or re.search(r'^[a-z]+[a-z]+\d+$', gmail_name):
+            spam_score += 0.3
+            reasons.append("gmail_suspect_pattern")
+
     # Cap le score à 1.0
     spam_score = min(spam_score, 1.0)
 
-    # Seuil de détection: 0.5
-    is_spam = spam_score >= 0.5
+    # Seuil de détection: 0.35 (abaissé de 0.5 pour être plus agressif)
+    is_spam = spam_score >= 0.35
 
     reason = "; ".join(reasons) if reasons else "no_match"
 
