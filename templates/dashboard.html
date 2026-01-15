@@ -30,6 +30,10 @@
             background-color: #6b7280 !important;
             color: white !important;
         }
+        .btn-outils-active {
+            background-color: #3b82f6 !important;
+            color: white !important;
+        }
         .btn-inactive {
             background-color: #e5e7eb !important;
             color: #374151 !important;
@@ -127,6 +131,11 @@
                             class="filter-btn flex-1 py-2 px-2 rounded-lg text-xs font-medium transition-all btn-inactive">
                         <i class="fas fa-ban mr-1"></i>SPAM
                         <span id="countSPAM" class="ml-1 bg-gray-300 px-1.5 py-0.5 rounded-full text-xs">0</span>
+                    </button>
+                    <button onclick="setMainFilter('OUTILS')" id="filterOUTILS"
+                            class="filter-btn flex-1 py-2 px-2 rounded-lg text-xs font-medium transition-all btn-inactive">
+                        <i class="fas fa-wrench mr-1"></i>OUTILS
+                        <span id="countOUTILS" class="ml-1 bg-gray-300 px-1.5 py-0.5 rounded-full text-xs">0</span>
                     </button>
                 </div>
             </div>
@@ -251,7 +260,7 @@
 
             // Mise à jour visuelle des boutons avec classes CSS personnalisées
             document.querySelectorAll('.filter-btn').forEach(btn => {
-                btn.classList.remove('btn-manual-active', 'btn-auto-active', 'btn-spam-active');
+                btn.classList.remove('btn-manual-active', 'btn-auto-active', 'btn-spam-active', 'btn-outils-active');
                 btn.classList.add('btn-inactive');
             });
 
@@ -261,6 +270,7 @@
                 if (filter === 'MANUEL') activeBtn.classList.add('btn-manual-active');
                 else if (filter === 'AUTO') activeBtn.classList.add('btn-auto-active');
                 else if (filter === 'SPAM') activeBtn.classList.add('btn-spam-active');
+                else if (filter === 'OUTILS') activeBtn.classList.add('btn-outils-active');
             }
 
             renderEmailList();
@@ -284,10 +294,11 @@
             loadEmails();
         }
 
-        // Retourne la catégorie principale de l'email (AUTO, MANUEL, SPAM)
+        // Retourne la catégorie principale de l'email (AUTO, MANUEL, SPAM, OUTILS)
         function getEmailMainCategory(email) {
             const cat = email.category;
             if (cat === 'SPAM') return 'SPAM';
+            if (cat === 'OUTILS') return 'OUTILS';
             if (cat === 'AUTO') return 'AUTO';
             if (cat === 'MANUEL') return 'MANUEL';
             if (cat === 'PENDING') return 'MANUEL';  // PENDING affiché dans MANUEL en attendant
@@ -298,18 +309,20 @@
 
         // Met à jour les compteurs sur les boutons
         function updateFilterCounts() {
-            let countManuel = 0, countAuto = 0, countSpam = 0, countPending = 0;
+            let countManuel = 0, countAuto = 0, countSpam = 0, countOutils = 0;
 
             allEmails.forEach(email => {
                 const mainCat = getEmailMainCategory(email);
                 if (mainCat === 'MANUEL') countManuel++;
                 else if (mainCat === 'AUTO') countAuto++;
                 else if (mainCat === 'SPAM') countSpam++;
+                else if (mainCat === 'OUTILS') countOutils++;
             });
 
             document.getElementById('countMANUEL').textContent = countManuel;
             document.getElementById('countAUTO').textContent = countAuto;
             document.getElementById('countSPAM').textContent = countSpam;
+            document.getElementById('countOUTILS').textContent = countOutils;
         }
 
         // Toast notification
@@ -384,7 +397,8 @@
                 const emptyMessages = {
                     'MANUEL': 'Aucun email en attente de validation',
                     'AUTO': 'Aucun email pour réponse automatique',
-                    'SPAM': 'Aucun spam détecté'
+                    'SPAM': 'Aucun spam détecté',
+                    'OUTILS': 'Aucune notification d\'outil'
                 };
                 list.innerHTML = `
                     <div class="p-8 text-center text-gray-400">
