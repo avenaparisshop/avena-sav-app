@@ -99,12 +99,25 @@
                 <h2 class="font-semibold text-gray-700 text-sm">
                     <i class="fas fa-inbox mr-2"></i>Emails
                 </h2>
-                <select id="statusFilter" onchange="loadEmails()" class="border rounded px-2 py-1 text-xs">
-                    <option value="pending">En attente</option>
-                    <option value="sent">Envoyés</option>
-                    <option value="ignored">Ignorés</option>
-                    <option value="all">Tous</option>
-                </select>
+                <div class="flex space-x-2">
+                    <select id="statusFilter" onchange="loadEmails()" class="border rounded px-2 py-1 text-xs">
+                        <option value="pending">En attente</option>
+                        <option value="sent">Envoyés</option>
+                        <option value="ignored">Ignorés</option>
+                        <option value="all">Tous</option>
+                    </select>
+                    <select id="categoryFilter" onchange="filterByCategory()" class="border rounded px-2 py-1 text-xs">
+                        <option value="all">Toutes catég.</option>
+                        <option value="auto">🤖 AUTO</option>
+                        <option value="manual">👤 MANUAL</option>
+                        <option value="SUIVI">📦 Suivi</option>
+                        <option value="QUESTION_PRODUIT">❓ Produit</option>
+                        <option value="LIVRAISON">🚚 Livraison</option>
+                        <option value="RETOUR">↩️ Retour</option>
+                        <option value="PROBLEME">⚠️ Problème</option>
+                        <option value="SPAM">🚫 Spam</option>
+                    </select>
+                </div>
             </div>
             <div id="emailList" class="email-list flex-1 overflow-y-auto">
                 <div class="p-8 text-center text-gray-400">
@@ -160,23 +173,33 @@
         let isCompactMode = false;
 
         // Catégories et couleurs
+        // AUTO = vert (peut être auto-répondu), MANUAL = orange (validation humaine)
         const categoryColors = {
-            'SUIVI': 'bg-blue-100 text-blue-800',
-            'RETOUR': 'bg-orange-100 text-orange-800',
-            'PROBLEME': 'bg-red-100 text-red-800',
-            'QUESTION': 'bg-purple-100 text-purple-800',
-            'MODIFICATION': 'bg-yellow-100 text-yellow-800',
-            'AUTRE': 'bg-gray-100 text-gray-800'
+            'SUIVI': 'bg-green-100 text-green-800',           // AUTO
+            'QUESTION_PRODUIT': 'bg-green-100 text-green-800', // AUTO
+            'LIVRAISON': 'bg-green-100 text-green-800',        // AUTO
+            'RETOUR': 'bg-orange-100 text-orange-800',         // MANUAL
+            'PROBLEME': 'bg-red-100 text-red-800',             // MANUAL
+            'MODIFICATION': 'bg-yellow-100 text-yellow-800',   // MANUAL
+            'QUESTION': 'bg-purple-100 text-purple-800',       // Legacy
+            'SPAM': 'bg-gray-300 text-gray-600',               // SPAM
+            'AUTRE': 'bg-gray-100 text-gray-800'               // MANUAL
         };
 
         const categoryLabels = {
-            'SUIVI': 'Suivi',
-            'RETOUR': 'Retour',
-            'PROBLEME': 'Problème',
-            'QUESTION': 'Question',
-            'MODIFICATION': 'Modif.',
-            'AUTRE': 'Autre'
+            'SUIVI': '📦 Suivi',
+            'QUESTION_PRODUIT': '❓ Produit',
+            'LIVRAISON': '🚚 Livraison',
+            'RETOUR': '↩️ Retour',
+            'PROBLEME': '⚠️ Problème',
+            'MODIFICATION': '✏️ Modif.',
+            'QUESTION': '❓ Question',
+            'SPAM': '🚫 Spam',
+            'AUTRE': '📋 Autre'
         };
+
+        // Catégories AUTO vs MANUAL
+        const autoCategories = ['SUIVI', 'QUESTION_PRODUIT', 'LIVRAISON'];
 
         // Toast notification
         function showToast(message, type = 'success') {
@@ -213,6 +236,60 @@
             }
         }
 
+        // Filtrer par catégorie (côté client)
+        function filterByCategory() {
+            renderEmailList();
+        }
+
+        // Afficher la liste filtrée
+        function renderEmailList() {
+            const list = document.getElementById('emailList');
+            const categoryFilter = document.getElementById('categoryFilter').value;
+
+            let filteredEmails = currentEmails;
+
+            if (categoryFilter === 'auto') {
+                filteredEmails = currentEmails.filter(e => autoCategories.includes(e.category));
+            } else if (categoryFilter === 'manual') {
+                filteredEmails = currentEmails.filter(e => !autoCategories.includes(e.category) && e.category !== 'SPAM');
+            } else if (categoryFilter !== 'all') {
+                filteredEmails = currentEmails.filter(e => e.category === categoryFilter);
+            }
+
+            if (filteredEmails.length === 0) {
+                list.innerHTML = `
+                    <div class="p-8 text-center text-gray-400">
+                        <i class="fas fa-inbox text-4xl mb-4"></i>
+                        <p>Aucun email</p>
+                    </div>
+                `;
+                return;
+            }
+
+            list.innerHTML = filteredEmails.map(email => `
+                <div class="email-item p-3 cursor-pointer hover:bg-gray-50 border-b ${selectedEmailId === email.id ? 'bg-pink-50 border-l-4 border-pink-500' : ''} ${isCompactMode ? 'compact' : ''}"
+                     onclick="selectEmail(${email.id})">
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center space-x-2 mb-1">
+                                <span class="category-badge ${categoryColors[email.category] || categoryColors['AUTRE']}">
+                                    ${categoryLabels[email.category] || '📋 Autre'}
+                                </span>
+                                ${autoCategories.includes(email.category) ? '<span class="text-xs bg-green-500 text-white px-1 rounded">AUTO</span>' : ''}
+                                ${email.order_number ? `<span class="text-xs text-gray-400">#${email.order_number}</span>` : ''}
+                                ${!email.is_read ? '<span class="w-2 h-2 bg-blue-500 rounded-full"></span>' : ''}
+                            </div>
+                            <p class="font-medium text-gray-800 truncate text-sm">${email.sender_name || email.sender_email}</p>
+                            <p class="email-subject text-xs text-gray-500 truncate">${email.subject}</p>
+                        </div>
+                        <div class="text-xs text-gray-400 ml-2 whitespace-nowrap">
+                            ${formatDate(email.received_at)}
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
         // Charger les emails
         async function loadEmails() {
             const status = document.getElementById('statusFilter').value;
@@ -224,38 +301,7 @@
 
                 if (data.success) {
                     currentEmails = data.emails;
-
-                    if (data.emails.length === 0) {
-                        list.innerHTML = `
-                            <div class="p-8 text-center text-gray-400">
-                                <i class="fas fa-inbox text-4xl mb-4"></i>
-                                <p>Aucun email</p>
-                            </div>
-                        `;
-                        return;
-                    }
-
-                    list.innerHTML = data.emails.map(email => `
-                        <div class="email-item p-3 cursor-pointer hover:bg-gray-50 border-b ${selectedEmailId === email.id ? 'bg-pink-50 border-l-4 border-pink-500' : ''} ${isCompactMode ? 'compact' : ''}"
-                             onclick="selectEmail(${email.id})">
-                            <div class="flex items-start justify-between">
-                                <div class="flex-1 min-w-0">
-                                    <div class="flex items-center space-x-2 mb-1">
-                                        <span class="category-badge ${categoryColors[email.category] || categoryColors['AUTRE']}">
-                                            ${categoryLabels[email.category] || 'Autre'}
-                                        </span>
-                                        ${email.order_number ? `<span class="text-xs text-gray-400">#${email.order_number}</span>` : ''}
-                                        ${!email.is_read ? '<span class="w-2 h-2 bg-blue-500 rounded-full"></span>' : ''}
-                                    </div>
-                                    <p class="font-medium text-gray-800 truncate text-sm">${email.sender_name || email.sender_email}</p>
-                                    <p class="email-subject text-xs text-gray-500 truncate">${email.subject}</p>
-                                </div>
-                                <div class="text-xs text-gray-400 ml-2 whitespace-nowrap">
-                                    ${formatDate(email.received_at)}
-                                </div>
-                            </div>
-                        </div>
-                    `).join('');
+                    renderEmailList();  // Utilise la fonction de rendu avec filtrage
                 }
             } catch (e) {
                 console.error('Erreur:', e);
