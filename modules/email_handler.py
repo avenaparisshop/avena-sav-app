@@ -179,6 +179,59 @@ class ZohoEmailHandler:
 
         return {'name': '', 'email': from_decoded}
 
+    def list_folders(self) -> List[str]:
+        """Liste tous les dossiers disponibles sur le serveur IMAP"""
+        folders = []
+
+        if not self.imap_connection:
+            if not self.connect_imap():
+                return folders
+
+        try:
+            status, folder_list = self.imap_connection.list()
+            if status == 'OK':
+                for folder_data in folder_list:
+                    # Parse le nom du dossier depuis la réponse IMAP
+                    if isinstance(folder_data, bytes):
+                        folder_data = folder_data.decode('utf-8')
+                    # Format typique: '(\\HasNoChildren) "/" "INBOX"'
+                    parts = folder_data.split('"')
+                    if len(parts) >= 2:
+                        folder_name = parts[-2] if parts[-1] == '' else parts[-1]
+                        folders.append(folder_name.strip())
+                logger.info(f"Dossiers disponibles: {folders}")
+        except Exception as e:
+            logger.error(f"Erreur listing folders: {e}")
+
+        return folders
+
+    def fetch_emails_from_folders(self, folders: List[str] = None, limit: int = None) -> List[Dict]:
+        """Récupère les emails de plusieurs dossiers"""
+        if folders is None:
+            folders = ["INBOX", "Archive"]
+
+        all_emails = []
+        seen_message_ids = set()
+
+        for folder in folders:
+            try:
+                folder_emails = self.fetch_unread_emails(folder=folder, limit=limit)
+                for email_data in folder_emails:
+                    # Évite les doublons basés sur message_id
+                    if email_data['message_id'] not in seen_message_ids:
+                        seen_message_ids.add(email_data['message_id'])
+                        email_data['folder'] = folder
+                        all_emails.append(email_data)
+            except Exception as e:
+                logger.error(f"Erreur récupération dossier {folder}: {e}")
+                continue
+
+        # Trie par date décroissante
+        all_emails.sort(key=lambda x: x.get('received_at') or datetime.min, reverse=True)
+
+        logger.info(f"Total récupéré de tous les dossiers: {len(all_emails)} emails")
+        return all_emails
+
     def fetch_unread_emails(self, folder: str = "INBOX", limit: int = None) -> List[Dict]:
         """Récupère tous les emails (lus et non lus) - sans limite par défaut"""
         emails = []
@@ -188,7 +241,23 @@ class ZohoEmailHandler:
                 return emails
 
         try:
-            self.imap_connection.select(folder)
+            # Essaie différentes variantes du nom de dossier
+            folder_variants = [folder, f'"{folder}"', folder.upper(), folder.lower()]
+            selected = False
+
+            for variant in folder_variants:
+                try:
+                    status, _ = self.imap_connection.select(variant)
+                    if status == 'OK':
+                        selected = True
+                        logger.info(f"Dossier sélectionné: {variant}")
+                        break
+                except:
+                    continue
+
+            if not selected:
+                logger.warning(f"Impossible de sélectionner le dossier {folder}")
+                return emails
 
             # Récupère d'abord la liste des emails non lus pour savoir lesquels sont lus/non lus
             status, unseen_messages = self.imap_connection.search(None, 'UNSEEN')

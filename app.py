@@ -494,8 +494,11 @@ def fetch_new_emails():
     try:
         handler = get_email_handler()
 
-        # RÃ©cupÃ¨re les emails (lus et non lus)
-        new_emails = handler.fetch_unread_emails(limit=None)
+        # Récupère les emails de tous les dossiers importants (INBOX + Archive)
+        new_emails = handler.fetch_emails_from_folders(
+            folders=["INBOX", "Archive"],
+            limit=None
+        )
 
         processed = 0
 
