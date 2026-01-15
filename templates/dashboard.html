@@ -17,6 +17,24 @@
         .toast { animation: slideIn 0.3s ease; }
         @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
 
+        /* Bouton MANUEL - couleur orange custom */
+        .btn-manual-active {
+            background-color: #f97316 !important;
+            color: white !important;
+        }
+        .btn-auto-active {
+            background-color: #22c55e !important;
+            color: white !important;
+        }
+        .btn-spam-active {
+            background-color: #6b7280 !important;
+            color: white !important;
+        }
+        .btn-inactive {
+            background-color: #e5e7eb !important;
+            color: #374151 !important;
+        }
+
         /* Layout transitions */
         .email-list-panel { transition: all 0.3s ease; min-width: 400px; }
         .email-list-panel.collapsed { min-width: 280px; width: 280px !important; }
@@ -99,17 +117,17 @@
             <div class="p-2 border-b bg-gray-50">
                 <div class="flex space-x-1">
                     <button onclick="setMainFilter('MANUAL')" id="filterMANUAL"
-                            class="filter-btn flex-1 py-2 px-2 rounded-lg text-xs font-medium transition-all bg-orange-500 text-white">
+                            class="filter-btn flex-1 py-2 px-2 rounded-lg text-xs font-medium transition-all btn-manual-active">
                         <i class="fas fa-user mr-1"></i>MANUEL
                         <span id="countMANUAL" class="ml-1 bg-white bg-opacity-30 px-1.5 py-0.5 rounded-full text-xs">0</span>
                     </button>
                     <button onclick="setMainFilter('AUTO')" id="filterAUTO"
-                            class="filter-btn flex-1 py-2 px-2 rounded-lg text-xs font-medium transition-all bg-gray-200 text-gray-700 hover:bg-gray-300">
+                            class="filter-btn flex-1 py-2 px-2 rounded-lg text-xs font-medium transition-all btn-inactive">
                         <i class="fas fa-robot mr-1"></i>AUTO
                         <span id="countAUTO" class="ml-1 bg-gray-300 px-1.5 py-0.5 rounded-full text-xs">0</span>
                     </button>
                     <button onclick="setMainFilter('SPAM')" id="filterSPAM"
-                            class="filter-btn flex-1 py-2 px-2 rounded-lg text-xs font-medium transition-all bg-gray-200 text-gray-700 hover:bg-gray-300">
+                            class="filter-btn flex-1 py-2 px-2 rounded-lg text-xs font-medium transition-all btn-inactive">
                         <i class="fas fa-ban mr-1"></i>SPAM
                         <span id="countSPAM" class="ml-1 bg-gray-300 px-1.5 py-0.5 rounded-full text-xs">0</span>
                     </button>
@@ -212,18 +230,18 @@
         function setMainFilter(filter) {
             currentMainFilter = filter;
 
-            // Mise à jour visuelle des boutons
+            // Mise à jour visuelle des boutons avec classes CSS personnalisées
             document.querySelectorAll('.filter-btn').forEach(btn => {
-                btn.classList.remove('bg-orange-500', 'bg-green-500', 'bg-gray-500', 'text-white');
-                btn.classList.add('bg-gray-200', 'text-gray-700');
+                btn.classList.remove('btn-manual-active', 'btn-auto-active', 'btn-spam-active');
+                btn.classList.add('btn-inactive');
             });
 
             const activeBtn = document.getElementById('filter' + filter);
             if (activeBtn) {
-                activeBtn.classList.remove('bg-gray-200', 'text-gray-700');
-                if (filter === 'MANUAL') activeBtn.classList.add('bg-orange-500', 'text-white');
-                else if (filter === 'AUTO') activeBtn.classList.add('bg-green-500', 'text-white');
-                else if (filter === 'SPAM') activeBtn.classList.add('bg-gray-500', 'text-white');
+                activeBtn.classList.remove('btn-inactive');
+                if (filter === 'MANUAL') activeBtn.classList.add('btn-manual-active');
+                else if (filter === 'AUTO') activeBtn.classList.add('btn-auto-active');
+                else if (filter === 'SPAM') activeBtn.classList.add('btn-spam-active');
             }
 
             renderEmailList();
