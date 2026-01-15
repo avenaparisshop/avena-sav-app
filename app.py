@@ -1013,16 +1013,19 @@ def fetch_sent_emails():
 
                 logger.info(f"Dossier Sent trouvé: {folder}")
 
-                # Récupère les emails envoyés (les 200 plus récents)
+                # Récupère les emails envoyés (les 50 plus récents pour éviter timeout)
                 status, messages = handler.imap_connection.search(None, 'ALL')
                 if status != 'OK':
                     continue
 
                 email_ids = messages[0].split()
-                # Prend les 200 plus récents
-                email_ids = list(reversed(email_ids[-200:]))
+                # Prend les 50 plus récents (réduit de 200 à 50 pour éviter timeout)
+                email_ids = list(reversed(email_ids[-50:]))
 
                 import email as email_lib
+
+                logger.info(f"Import de {len(email_ids)} emails envoyés...")
+                processed_count = 0
 
                 for email_id_bytes in email_ids:
                     try:
@@ -1032,6 +1035,10 @@ def fetch_sent_emails():
 
                         raw_email = msg_data[0][1]
                         msg = email_lib.message_from_bytes(raw_email)
+
+                        processed_count += 1
+                        if processed_count % 10 == 0:
+                            logger.info(f"Traité {processed_count}/{len(email_ids)} emails envoyés")
 
                         # Parse les headers
                         to_header = msg.get('To', '')
