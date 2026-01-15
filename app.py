@@ -1036,18 +1036,37 @@ def fetch_sent_emails():
 
                 logger.info(f"Dossier Sent trouvé: {folder}")
 
-                # Récupère les emails envoyés (les 50 plus récents pour éviter timeout)
-                status, messages = handler.imap_connection.search(None, 'ALL')
-                if status != 'OK':
-                    continue
-
-                email_ids = messages[0].split()
-                # Prend les 50 plus récents (réduit de 200 à 50 pour éviter timeout)
-                email_ids = list(reversed(email_ids[-50:]))
-
                 import email as email_lib
 
-                logger.info(f"Import de {len(email_ids)} emails envoyés...")
+                # D'abord récupère les expéditeurs des emails reçus pour chercher les réponses correspondantes
+                received_senders = db.session.query(Email.sender_email).distinct().all()
+                sender_emails = [s[0].lower() for s in received_senders if s[0]]
+
+                email_ids = []
+
+                # Cherche les emails envoyés à chaque expéditeur connu
+                for sender_email in sender_emails[:30]:  # Limite à 30 pour éviter timeout
+                    try:
+                        search_criteria = f'(TO "{sender_email}")'
+                        status, messages = handler.imap_connection.search(None, search_criteria)
+                        if status == 'OK' and messages[0]:
+                            found_ids = messages[0].split()
+                            email_ids.extend(found_ids[-5:])  # Max 5 par destinataire
+                    except Exception as search_err:
+                        logger.debug(f"Erreur recherche pour {sender_email}: {search_err}")
+                        continue
+
+                # Si pas assez trouvés, ajoute les plus récents
+                if len(email_ids) < 30:
+                    status, messages = handler.imap_connection.search(None, 'ALL')
+                    if status == 'OK':
+                        all_ids = messages[0].split()
+                        email_ids.extend(list(reversed(all_ids[-30:])))
+
+                # Déduplique
+                email_ids = list(dict.fromkeys(email_ids))[:50]
+
+                logger.info(f"Import de {len(email_ids)} emails envoyés (ciblés + récents)...")
                 processed_count = 0
 
                 for email_id_bytes in email_ids:
@@ -1135,12 +1154,19 @@ def fetch_sent_emails():
 
             # Si pas trouvé via In-Reply-To, essaie via l'adresse email et le sujet
             if not original_email_id and email_data['recipient_email']:
-                # Cherche un email reçu du même expéditeur avec un sujet similaire
-                subject_clean = email_data['subject'].replace('Re: ', '').replace('RE: ', '').strip()
+                # Cherche un email reçu du même expéditeur avec un sujet similaire (case-insensitive)
+                subject_clean = email_data['subject'].replace('Re: ', '').replace('RE: ', '').replace('Ré: ', '').replace('Fwd: ', '').strip()
+                recipient_lower = email_data['recipient_email'].lower()
                 possible_original = Email.query.filter(
-                    Email.sender_email == email_data['recipient_email'],
-                    Email.subject.like(f'%{subject_clean[:30]}%')
+                    db.func.lower(Email.sender_email) == recipient_lower,
+                    Email.subject.ilike(f'%{subject_clean[:30]}%')
                 ).order_by(Email.received_at.desc()).first()
+
+                # Si pas trouvé par sujet, cherche juste par email
+                if not possible_original:
+                    possible_original = Email.query.filter(
+                        db.func.lower(Email.sender_email) == recipient_lower
+                    ).order_by(Email.received_at.desc()).first()
 
                 if possible_original:
                     original_email_id = possible_original.id
