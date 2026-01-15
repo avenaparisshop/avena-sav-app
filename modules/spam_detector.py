@@ -153,6 +153,42 @@ SPAM_SUBJECT_PATTERNS = [
     r'offre.*limitée',
     r'special.*discount',
     r'réduction.*spéciale',
+
+    # === INFLUENCEURS / AFFILIÉS / UGC ===
+    r'influencer',
+    r'influenceur',
+    r'ugc.*creator',
+    r'créateur.*ugc',
+    r'content.*creator',
+    r'créateur.*contenu',
+    r'brand.*ambassador',
+    r'ambassadeur',
+    r'affiliate.*program',
+    r'programme.*affiliation',
+    r'commission.*based',
+    r'basé.*commission',
+    r'confirmed.*orders',
+    r'commandes.*confirmées',
+    r'success.*based',
+    r'strategic.*creative',
+    r'creative.*expert',
+    r'creative.*agency',
+    r'agence.*créative',
+
+    # === QUESTIONS COMMERCIALES NON-CLIENTS ===
+    r'do.*you.*ship.*to',
+    r'livrez.*vous',
+    r'expédiez.*vous',
+    r'ship.*internationally',
+    r'livraison.*international',
+    r'wholesale.*inquiry',
+    r'demande.*gros',
+    r'bulk.*order',
+    r'commande.*volume',
+    r'reseller',
+    r'revendeur',
+    r'distributor',
+    r'distributeur',
 ]
 
 SPAM_BODY_PATTERNS = [
@@ -216,6 +252,64 @@ SPAM_BODY_PATTERNS = [
     r'essai.*gratuit',
     r'no.*obligation',
     r'sans.*engagement',
+
+    # === DÉMARCHAGE INFLUENCEURS / AFFILIÉS / UGC ===
+    r'confirmed.*orders',
+    r'commandes.*confirmées',
+    r'commission.*based',
+    r'basé.*sur.*commission',
+    r'success.*based.*commission',
+    r'paid.*only.*after.*sales',
+    r'payé.*après.*ventes',
+    r'growth.*goals',
+    r'objectifs.*croissance',
+    r'ugc.*creator',
+    r'créateur.*ugc',
+    r'content.*creator',
+    r'créateur.*contenu',
+    r'brand.*ambassador',
+    r'ambassadeur.*marque',
+    r'affiliate',
+    r'affiliation',
+    r'influencer.*marketing',
+    r'marketing.*influence',
+    r'collab.*proposal',
+    r'proposition.*collab',
+    r'work.*together',
+    r'travailler.*ensemble',
+    r'partnership.*inquiry',
+    r'demande.*partenariat',
+    r'how.*does.*\d+.*orders.*sound',
+    r'que.*pensez.*vous.*de.*\d+.*commandes',
+    r'before.*january',
+    r'avant.*janvier',
+    r'before.*february',
+    r'before.*march',
+    r'interested.*in.*promoting',
+    r'intéressé.*promouvoir',
+
+    # === QUESTIONS SHIPPING NON-CLIENTS ===
+    r'do.*you.*ship.*to',
+    r'ship.*to.*the.*united.*states',
+    r'ship.*to.*usa',
+    r'ship.*to.*uk',
+    r'ship.*internationally',
+    r'livrez.*vous.*à',
+    r'expédiez.*vous',
+    r'international.*shipping',
+    r'livraison.*internationale',
+
+    # === DEMANDES B2B / WHOLESALE ===
+    r'wholesale.*price',
+    r'prix.*gros',
+    r'bulk.*order',
+    r'commande.*volume',
+    r'reseller.*discount',
+    r'remise.*revendeur',
+    r'distributor.*inquiry',
+    r'devenir.*distributeur',
+    r'retail.*partnership',
+    r'partenariat.*retail',
 ]
 
 # Expéditeurs légitimes à ne jamais bloquer
@@ -391,7 +485,13 @@ def detect_spam(sender_email: str, sender_name: str, subject: str, body: str) ->
                 spam_score += 0.05
 
     # Bonus si le nom de l'expéditeur contient des mots suspects
-    suspicious_names = ['facebook', 'meta', 'tiktok', 'instagram', 'support', 'security', 'admin']
+    suspicious_names = [
+        'facebook', 'meta', 'tiktok', 'instagram', 'support', 'security', 'admin',
+        # Noms génériques de démarcheurs
+        'strategic', 'creative', 'agency', 'marketing', 'growth', 'partner',
+        'influencer', 'ugc', 'ambassador', 'affiliate', 'expert', 'consultant',
+        'solutions', 'services', 'digital', 'media', 'studio', 'labs'
+    ]
     for word in suspicious_names:
         if word in sender_name_lower and not is_whitelisted(sender_email, subject):
             # Vérifie que ce n'est pas un vrai email officiel

@@ -737,6 +737,51 @@ def classify_next_email():
         }), 500
 
 
+@app.route('/api/redetect-spam', methods=['POST'])
+def redetect_spam():
+    """Re-detecte le spam sur TOUS les emails (utilise les nouveaux patterns)"""
+    try:
+        from modules.spam_detector import detect_spam
+
+        # Recupere TOUS les emails non-spam pour re-verifier
+        emails = Email.query.filter(Email.category != 'SPAM').all()
+
+        logger.info(f"Re-detection spam sur {len(emails)} emails...")
+
+        spam_detected = 0
+
+        for email in emails:
+            is_spam, spam_score, spam_reason = detect_spam(
+                email.sender_email or '',
+                email.sender_name or '',
+                email.subject or '',
+                email.body or ''
+            )
+
+            if is_spam:
+                email.category = 'SPAM'
+                email.confidence = spam_score
+                email.status = 'ignored'
+                spam_detected += 1
+                logger.info(f"SPAM detecte: {email.id} - {email.subject[:50]}... (raison: {spam_reason})")
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': f'{spam_detected} nouveaux spams detectes sur {len(emails)} emails',
+            'spam_detected': spam_detected,
+            'total_checked': len(emails)
+        })
+
+    except Exception as e:
+        logger.error(f"Erreur re-detection spam: {e}")
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        }), 500
+
+
 @app.route('/api/reclassify-emails', methods=['POST'])
 def reclassify_all_emails():
     """Reclassifie tous les emails en attente avec l'IA et le detecteur de spam"""

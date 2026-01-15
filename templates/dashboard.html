@@ -78,6 +78,10 @@
                     Classifier
                     <span id="classifyCount" class="ml-2 bg-white bg-opacity-30 px-2 py-0.5 rounded-full text-xs hidden">0</span>
                 </button>
+                <button onclick="redetectSpam()" id="spamBtn" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg flex items-center text-sm" title="Relancer la détection spam">
+                    <i class="fas fa-shield-alt mr-2"></i>
+                    Anti-spam
+                </button>
                 <a href="/stores" class="text-gray-600 hover:text-gray-800 mr-2" title="Shops connectés">
                     <i class="fas fa-shopping-bag text-xl"></i>
                 </a>
@@ -1111,6 +1115,32 @@
                 btn.innerHTML = '<i class="fas fa-brain mr-2"></i>Classifier';
                 document.getElementById('classifyCount').classList.add('hidden');
                 loadStats();
+            }
+        }
+
+        // Re-détecter le spam (avec nouveaux patterns)
+        async function redetectSpam() {
+            const btn = document.getElementById('spamBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Analyse...';
+
+            try {
+                const res = await fetch('/api/redetect-spam', { method: 'POST' });
+                const data = await res.json();
+
+                if (data.success) {
+                    showToast(`${data.spam_detected} nouveaux spams détectés`);
+                    await loadEmails();
+                    updateFilterCounts();
+                    loadStats();
+                } else {
+                    showToast(data.message || 'Erreur', 'error');
+                }
+            } catch (e) {
+                showToast('Erreur lors de la détection spam', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-shield-alt mr-2"></i>Anti-spam';
             }
         }
 
