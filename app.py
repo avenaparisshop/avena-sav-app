@@ -586,10 +586,11 @@ def fetch_new_emails():
 
         # Recupere les emails depuis INBOX et Archives
         # Inclut INBOX + Archive (Zoho déplace les emails répondus dans Archive)
+        # Limite à 50 par dossier pour éviter les crashs
         logger.info("Debut recuperation emails depuis IMAP...")
         new_emails = handler.fetch_emails_from_folders(
             folders=["INBOX", "Archive", "Archiver"],
-            limit_per_folder=200
+            limit_per_folder=50
         )
         logger.info(f"Emails recuperes: {len(new_emails)}")
 
