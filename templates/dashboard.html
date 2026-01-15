@@ -400,7 +400,10 @@
                 return;
             }
 
-            list.innerHTML = filteredEmails.map(email => `
+            list.innerHTML = filteredEmails.map(email => {
+                const lang = detectLanguage(email.body + ' ' + email.subject);
+                const langColor = languageColors[lang] || languageColors['FR'];
+                return `
                 <div class="email-item p-3 cursor-pointer hover:bg-gray-50 border-b ${selectedEmailId === email.id ? 'bg-pink-50 border-l-4 border-pink-500' : ''} ${isCompactMode ? 'compact' : ''}"
                      onclick="selectEmail(${email.id})"
                      oncontextmenu="showContextMenu(event, ${email.id})">
@@ -408,6 +411,7 @@
                         <div class="flex-1 min-w-0">
                             <div class="flex items-center space-x-2 mb-1">
                                 ${email.order_number ? `<span class="text-xs text-pink-500 font-medium">#${email.order_number}</span>` : ''}
+                                <span class="text-xs px-1.5 py-0.5 rounded font-medium ${langColor}">${lang}</span>
                                 ${!email.has_reply ? '<span class="w-2 h-2 bg-blue-500 rounded-full" title="Non répondu"></span>' : ''}
                             </div>
                             <p class="font-medium text-gray-800 truncate text-sm">${email.sender_name || email.sender_email}</p>
@@ -418,7 +422,7 @@
                         </div>
                     </div>
                 </div>
-            `).join('');
+            `}).join('');
         }
 
         // Charger les emails depuis l'API
