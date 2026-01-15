@@ -78,7 +78,7 @@
                     Classifier
                     <span id="classifyCount" class="ml-2 bg-white bg-opacity-30 px-2 py-0.5 rounded-full text-xs hidden">0</span>
                 </button>
-                <button onclick="redetectSpam()" id="spamBtn" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg flex items-center text-sm" title="Relancer la détection spam">
+                <button onclick="learnAndApplySpam()" id="spamBtn" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg flex items-center text-sm" title="Apprendre du dossier spam Zoho et appliquer">
                     <i class="fas fa-shield-alt mr-2"></i>
                     Anti-spam
                 </button>
@@ -1118,25 +1118,54 @@
             }
         }
 
-        // Re-détecter le spam (avec nouveaux patterns)
-        async function redetectSpam() {
+        // Apprendre du dossier spam Zoho et appliquer
+        async function learnAndApplySpam() {
             const btn = document.getElementById('spamBtn');
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Analyse...';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Apprentissage...';
 
             try {
-                const res = await fetch('/api/redetect-spam', { method: 'POST' });
-                const data = await res.json();
+                // 1. Apprend depuis le dossier spam de Zoho
+                showToast('Analyse du dossier spam Zoho...', 'info');
+                const learnRes = await fetch('/api/learn-spam-from-zoho', { method: 'POST' });
+                const learnData = await learnRes.json();
 
-                if (data.success) {
-                    showToast(`${data.spam_detected} nouveaux spams détectés`);
-                    await loadEmails();
-                    updateFilterCounts();
-                    loadStats();
+                if (learnData.success) {
+                    const patterns = learnData.patterns;
+                    const domainsCount = patterns.domains?.length || 0;
+                    const wordsCount = patterns.subject_words?.length || 0;
+
+                    showToast(`${learnData.total_spam_emails} spams analysés (${domainsCount} domaines, ${wordsCount} mots-clés)`, 'info');
+
+                    // Log les patterns trouvés dans la console
+                    console.log('Patterns spam appris:', learnData);
+
+                    // 2. Applique les nouveaux patterns
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Application...';
+
+                    // Envoie les patterns au serveur pour les ajouter dynamiquement
+                    const applyRes = await fetch('/api/apply-learned-spam', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(learnData.patterns)
+                    });
+                    const applyData = await applyRes.json();
+
+                    if (applyData.success) {
+                        showToast(`${applyData.spam_detected} nouveaux spams détectés!`);
+                    } else {
+                        showToast(applyData.message || 'Erreur application', 'error');
+                    }
                 } else {
-                    showToast(data.message || 'Erreur', 'error');
+                    showToast(learnData.message || 'Erreur apprentissage', 'error');
                 }
+
+                await loadEmails();
+                updateFilterCounts();
+                loadStats();
+
             } catch (e) {
+                console.error('Erreur anti-spam:', e);
                 showToast('Erreur lors de la détection spam', 'error');
             } finally {
                 btn.disabled = false;

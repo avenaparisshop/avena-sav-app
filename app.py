@@ -737,6 +737,222 @@ def classify_next_email():
         }), 500
 
 
+@app.route('/api/learn-spam-from-zoho', methods=['POST'])
+def learn_spam_from_zoho():
+    """Extrait les patterns des emails dans le dossier Courrier indésirable de Zoho"""
+    try:
+        handler = get_email_handler()
+
+        if not handler.connect_imap():
+            return jsonify({
+                'success': False,
+                'message': 'Erreur connexion IMAP'
+            }), 500
+
+        # Dossiers spam possibles dans Zoho
+        spam_folders = ["Junk", "Spam", "Courrier indésirable", "Junk E-mail", "Bulk Mail"]
+
+        spam_emails = []
+        found_folder = None
+
+        for folder in spam_folders:
+            try:
+                handler.disconnect_imap()
+                handler.connect_imap()
+                status, _ = handler.imap_connection.select(folder)
+                if status == 'OK':
+                    found_folder = folder
+                    logger.info(f"Dossier spam trouvé: {folder}")
+
+                    # Récupère tous les emails du dossier spam
+                    status, messages = handler.imap_connection.search(None, 'ALL')
+                    if status == 'OK' and messages[0]:
+                        email_ids = messages[0].split()
+                        logger.info(f"Trouvé {len(email_ids)} emails dans {folder}")
+
+                        import email as email_lib
+
+                        # Limite à 200 pour éviter timeout
+                        for email_id in email_ids[-200:]:
+                            try:
+                                status, msg_data = handler.imap_connection.fetch(email_id, '(RFC822)')
+                                if status != 'OK':
+                                    continue
+
+                                raw_email = msg_data[0][1]
+                                msg = email_lib.message_from_bytes(raw_email)
+
+                                # Parse les infos
+                                from_header = msg.get('From', '')
+                                from_decoded = handler._decode_header_value(from_header)
+
+                                # Extrait email et nom
+                                import re
+                                email_match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', from_decoded)
+                                sender_email = email_match.group(0).lower() if email_match else ''
+
+                                name_match = re.match(r'^(.+?)\s*<', from_decoded)
+                                sender_name = name_match.group(1).strip().strip('"') if name_match else ''
+
+                                subject = handler._decode_header_value(msg.get('Subject', ''))
+
+                                spam_emails.append({
+                                    'sender_email': sender_email,
+                                    'sender_name': sender_name,
+                                    'subject': subject,
+                                    'domain': sender_email.split('@')[1] if '@' in sender_email else ''
+                                })
+
+                            except Exception as e:
+                                logger.debug(f"Erreur parsing email spam: {e}")
+                                continue
+                    break
+            except Exception as e:
+                logger.debug(f"Dossier {folder} non accessible: {e}")
+                continue
+
+        handler.disconnect_imap()
+
+        if not spam_emails:
+            return jsonify({
+                'success': False,
+                'message': 'Aucun email trouvé dans le dossier spam'
+            })
+
+        # Analyse les patterns
+        import re
+        from collections import Counter
+
+        # Compte les domaines
+        domains = Counter([e['domain'] for e in spam_emails if e['domain']])
+
+        # Compte les mots dans les sujets
+        subject_words = []
+        for e in spam_emails:
+            words = re.findall(r'\b[a-zA-Z]{4,}\b', e['subject'].lower())
+            subject_words.extend(words)
+        common_subject_words = Counter(subject_words).most_common(50)
+
+        # Compte les mots dans les noms d'expéditeurs
+        name_words = []
+        for e in spam_emails:
+            words = re.findall(r'\b[a-zA-Z]{3,}\b', e['sender_name'].lower())
+            name_words.extend(words)
+        common_name_words = Counter(name_words).most_common(30)
+
+        # Filtre les domaines qui apparaissent plus de 2 fois (vrais spammeurs)
+        spam_domains = [d for d, count in domains.items() if count >= 2]
+
+        # Génère les patterns suggérés
+        suggested_patterns = {
+            'domains': spam_domains[:30],
+            'subject_words': [w for w, c in common_subject_words if c >= 3],
+            'sender_name_words': [w for w, c in common_name_words if c >= 2]
+        }
+
+        return jsonify({
+            'success': True,
+            'folder_found': found_folder,
+            'total_spam_emails': len(spam_emails),
+            'patterns': suggested_patterns,
+            'top_spam_domains': dict(domains.most_common(20)),
+            'sample_subjects': [e['subject'][:60] for e in spam_emails[:20]],
+            'message': f'{len(spam_emails)} emails analysés depuis {found_folder}'
+        })
+
+    except Exception as e:
+        import traceback
+        logger.error(f"Erreur learn spam: {e}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        }), 500
+
+
+@app.route('/api/apply-learned-spam', methods=['POST'])
+def apply_learned_spam():
+    """Applique les patterns appris et re-détecte le spam"""
+    try:
+        from modules.spam_detector import (
+            detect_spam, add_spam_sender_pattern, add_spam_subject_pattern,
+            SPAM_SENDER_PATTERNS, SPAM_SUBJECT_PATTERNS, SPAM_BODY_PATTERNS
+        )
+
+        data = request.get_json() or {}
+
+        patterns_added = 0
+
+        # Ajoute les domaines comme patterns d'expéditeur
+        domains = data.get('domains', [])
+        for domain in domains:
+            pattern = f'@.*{re.escape(domain)}$'
+            if pattern not in SPAM_SENDER_PATTERNS:
+                SPAM_SENDER_PATTERNS.append(pattern)
+                patterns_added += 1
+                logger.info(f"Pattern domaine ajouté: {domain}")
+
+        # Ajoute les mots-clés de sujet
+        subject_words = data.get('subject_words', [])
+        for word in subject_words:
+            # Évite les mots trop génériques
+            if len(word) >= 4 and word not in ['your', 'with', 'this', 'that', 'have', 'from', 'will', 'been', 'more', 'about']:
+                pattern = rf'\b{re.escape(word)}\b'
+                if pattern not in SPAM_SUBJECT_PATTERNS:
+                    SPAM_SUBJECT_PATTERNS.append(pattern)
+                    patterns_added += 1
+
+        # Ajoute les mots des noms d'expéditeurs dans les patterns body aussi
+        name_words = data.get('sender_name_words', [])
+        for word in name_words:
+            if len(word) >= 4:
+                pattern = rf'\b{re.escape(word)}\b'
+                if pattern not in SPAM_BODY_PATTERNS:
+                    SPAM_BODY_PATTERNS.append(pattern)
+
+        logger.info(f"Patterns ajoutés: {patterns_added}")
+
+        # Maintenant re-détecte le spam sur tous les emails
+        emails = Email.query.filter(Email.category != 'SPAM').all()
+        logger.info(f"Re-detection spam sur {len(emails)} emails avec nouveaux patterns...")
+
+        spam_detected = 0
+
+        for email in emails:
+            is_spam, spam_score, spam_reason = detect_spam(
+                email.sender_email or '',
+                email.sender_name or '',
+                email.subject or '',
+                email.body or ''
+            )
+
+            if is_spam:
+                email.category = 'SPAM'
+                email.confidence = spam_score
+                email.status = 'ignored'
+                spam_detected += 1
+                logger.info(f"SPAM detecte: {email.id} - {email.subject[:50]}... (raison: {spam_reason})")
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': f'{spam_detected} spams détectés ({patterns_added} patterns ajoutés)',
+            'spam_detected': spam_detected,
+            'patterns_added': patterns_added,
+            'total_checked': len(emails)
+        })
+
+    except Exception as e:
+        import traceback
+        logger.error(f"Erreur apply learned spam: {e}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        }), 500
+
+
 @app.route('/api/redetect-spam', methods=['POST'])
 def redetect_spam():
     """Re-detecte le spam sur TOUS les emails (utilise les nouveaux patterns)"""
