@@ -65,9 +65,53 @@ class ZohoEmailHandler:
                 result.append(part)
         return ''.join(result)
 
+    def _clean_html_to_text(self, html: str) -> str:
+        """Convertit le HTML en texte propre"""
+        if not html:
+            return ""
+
+        # Supprime les balises style et script avec leur contenu
+        html = re.sub(r'<style[^>]*>.*?</style>', '', html, flags=re.DOTALL | re.IGNORECASE)
+        html = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL | re.IGNORECASE)
+
+        # Supprime les commentaires HTML
+        html = re.sub(r'<!--.*?-->', '', html, flags=re.DOTALL)
+
+        # Supprime le DOCTYPE et les balises meta/head
+        html = re.sub(r'<!DOCTYPE[^>]*>', '', html, flags=re.IGNORECASE)
+        html = re.sub(r'<head[^>]*>.*?</head>', '', html, flags=re.DOTALL | re.IGNORECASE)
+
+        # Remplace les balises de saut de ligne par des retours à la ligne
+        html = re.sub(r'<br\s*/?>', '\n', html, flags=re.IGNORECASE)
+        html = re.sub(r'</p>', '\n', html, flags=re.IGNORECASE)
+        html = re.sub(r'</div>', '\n', html, flags=re.IGNORECASE)
+        html = re.sub(r'</tr>', '\n', html, flags=re.IGNORECASE)
+        html = re.sub(r'</li>', '\n', html, flags=re.IGNORECASE)
+
+        # Supprime toutes les autres balises HTML
+        html = re.sub(r'<[^>]+>', ' ', html)
+
+        # Décode les entités HTML courantes
+        html = html.replace('&nbsp;', ' ')
+        html = html.replace('&amp;', '&')
+        html = html.replace('&lt;', '<')
+        html = html.replace('&gt;', '>')
+        html = html.replace('&quot;', '"')
+        html = html.replace('&#39;', "'")
+        html = html.replace('&apos;', "'")
+        html = re.sub(r'&#(\d+);', lambda m: chr(int(m.group(1))), html)
+
+        # Nettoie les espaces multiples mais garde les retours à la ligne
+        html = re.sub(r'[ \t]+', ' ', html)
+        html = re.sub(r'\n\s*\n', '\n\n', html)
+        html = re.sub(r'\n{3,}', '\n\n', html)
+
+        return html.strip()
+
     def _extract_email_body(self, msg) -> str:
         """Extrait le corps de l'email (préfère le texte brut)"""
         body = ""
+        html_body = ""
 
         if msg.is_multipart():
             for part in msg.walk():
@@ -86,23 +130,30 @@ class ZohoEmailHandler:
                         break  # Préfère le texte brut
                     except:
                         pass
-                elif content_type == "text/html" and not body:
+                elif content_type == "text/html" and not html_body:
                     try:
                         payload = part.get_payload(decode=True)
                         charset = part.get_content_charset() or 'utf-8'
-                        body = payload.decode(charset, errors='replace')
-                        # Nettoie le HTML basique
-                        body = re.sub(r'<[^>]+>', ' ', body)
-                        body = re.sub(r'\s+', ' ', body).strip()
+                        html_body = payload.decode(charset, errors='replace')
                     except:
                         pass
         else:
             try:
                 payload = msg.get_payload(decode=True)
                 charset = msg.get_content_charset() or 'utf-8'
-                body = payload.decode(charset, errors='replace')
+                content = payload.decode(charset, errors='replace')
+                content_type = msg.get_content_type()
+
+                if content_type == "text/html":
+                    html_body = content
+                else:
+                    body = content
             except:
                 pass
+
+        # Si pas de texte brut, convertir le HTML
+        if not body and html_body:
+            body = self._clean_html_to_text(html_body)
 
         return body.strip()
 
@@ -128,8 +179,8 @@ class ZohoEmailHandler:
 
         return {'name': '', 'email': from_decoded}
 
-    def fetch_unread_emails(self, folder: str = "INBOX", limit: int = 50) -> List[Dict]:
-        """Récupère tous les emails (lus et non lus)"""
+    def fetch_unread_emails(self, folder: str = "INBOX", limit: int = None) -> List[Dict]:
+        """Récupère tous les emails (lus et non lus) - sans limite par défaut"""
         emails = []
 
         if not self.imap_connection:
@@ -152,8 +203,9 @@ class ZohoEmailHandler:
 
             email_ids = messages[0].split()
 
-            # Prend les emails les plus récents (les derniers)
-            email_ids = email_ids[-limit:] if len(email_ids) > limit else email_ids
+            # Prend les emails les plus récents (applique une limite seulement si spécifiée)
+            if limit is not None and len(email_ids) > limit:
+                email_ids = email_ids[-limit:]
             # Inverse pour avoir les plus récents en premier
             email_ids = list(reversed(email_ids))
 

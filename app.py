@@ -16,6 +16,7 @@ from modules.email_handler import ZohoEmailHandler, test_zoho_connection
 from modules.shopify_handler import ShopifyHandler, test_shopify_connection
 from modules.ai_responder import AIResponder, test_ai_connection
 from modules.shopify_oauth import ShopifyOAuth, ShopifyTokenStorage, ShopifyTokenStorageDB, get_oauth_handler, get_oauth_handler_for_shop, get_permanent_access_token
+from modules.parcelpanel_handler import get_parcelpanel_manager, test_parcelpanel_connection
 
 # Configuration logging
 logging.basicConfig(
@@ -375,7 +376,7 @@ def get_emails():
     if status != 'all':
         query = query.filter_by(status=status)
 
-    emails = query.order_by(Email.received_at.desc()).limit(50).all()
+    emails = query.order_by(Email.received_at.desc()).all()
 
     return jsonify({
         'success': True,
@@ -494,7 +495,7 @@ def fetch_new_emails():
         handler = get_email_handler()
 
         # RÃ©cupÃ¨re les emails (lus et non lus)
-        new_emails = handler.fetch_unread_emails(limit=50)
+        new_emails = handler.fetch_unread_emails(limit=None)
 
         processed = 0
 
@@ -597,6 +598,29 @@ def generate_email_response(email_id):
         else:
             order_context = {'order': None, 'customer': None}
             logger.warning(f"Pas de handler Shopify pour {target_shop}")
+
+        # RÃ©cupÃ¨re les infos de tracking Parcelpanel en temps rÃ©el
+        parcelpanel_manager = get_parcelpanel_manager()
+        tracking_info = None
+
+        if order_context.get('order'):
+            order = order_context['order']
+            tracking_number = order.get('tracking_number')
+            order_num = order.get('order_number') or email_record.order_number
+
+            # Essaie d'abord avec le numÃ©ro de tracking, sinon avec le numÃ©ro de commande
+            if tracking_number:
+                tracking_info = parcelpanel_manager.get_tracking_for_shop(
+                    target_shop, tracking_number=tracking_number
+                )
+            if not tracking_info and order_num:
+                tracking_info = parcelpanel_manager.get_tracking_for_shop(
+                    target_shop, order_number=str(order_num)
+                )
+
+            if tracking_info:
+                order_context['parcelpanel_tracking'] = tracking_info
+                logger.info(f"Tracking Parcelpanel trouvÃ©: {tracking_info.get('status_text')}")
 
         # Met Ã  jour le numÃ©ro de commande si trouvÃ©
         if not email_record.order_number and order_context.get('order'):

@@ -227,10 +227,11 @@
                                     <p class="font-medium text-gray-800 truncate">${email.sender_name || email.sender_email}</p>
                                     <p class="text-sm text-gray-500 truncate">${email.subject}</p>
                                 </div>
-                    <div class="text-xs text-gray-400 ml-4 whitespace-nowrap">
-                                            ${formatDate(email.received_at)}
-                                                                </div>
-                                                                </div>
+                                <div class="text-xs text-gray-400 ml-4 whitespace-nowrap">
+                                    ${formatDate(email.received_at)}
+                                </div>
+                            </div>
+                        </div>
                     `).join('');
                 }
             } catch (e) {
