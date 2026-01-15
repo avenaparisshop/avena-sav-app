@@ -1,8 +1,8 @@
 """
-Module IA - Classification et génération de réponses avec Claude
+Module IA - Classification et génération de réponses avec Gemini
 Intègre les données Parcelpanel pour le tracking en temps réel
 """
-import anthropic
+import requests
 from typing import Dict, Optional, Tuple
 import json
 import logging
@@ -51,85 +51,60 @@ CATEGORIES = {
     }
 }
 
-# Exemples de réponses pour chaque catégorie (style Avena Paris)
-# Ces exemples aident l'IA à reproduire le ton et le style
-RESPONSE_EXAMPLES = {
-    "SUIVI": """Bonjour,
-
-Merci pour votre message !
-
-Votre commande #{order_number} a bien été expédiée et est actuellement {status}.
-
-Vous pouvez suivre votre colis en temps réel via ce lien : {tracking_url}
-
-La livraison est estimée pour le {estimated_delivery}.
-
-N'hésitez pas si vous avez d'autres questions !
-
-Bonne journée,
-L'équipe Avena Paris""",
-
-    "QUESTION_PRODUIT": """Bonjour,
-
-Merci pour votre intérêt pour nos produits !
-
-{answer_to_question}
-
-N'hésitez pas à nous contacter si vous avez d'autres questions, nous sommes là pour vous aider !
-
-À très vite sur notre boutique,
-L'équipe Avena Paris""",
-
-    "LIVRAISON": """Bonjour,
-
-Merci pour votre message !
-
-Concernant nos délais de livraison :
-- France métropolitaine : 2-4 jours ouvrés
-- Europe : 4-7 jours ouvrés
-- International : 7-14 jours ouvrés
-
-Nous expédions via Colissimo, Mondial Relay ou Chronopost selon votre choix.
-
-Dès que votre commande sera expédiée, vous recevrez un email avec le numéro de suivi.
-
-Belle journée,
-L'équipe Avena Paris""",
-
-    "RETOUR": """Bonjour,
-
-Nous avons bien reçu votre demande de retour.
-
-Vous disposez de 14 jours pour nous retourner votre article dans son état d'origine, non porté et avec les étiquettes.
-
-Voici la procédure :
-1. Emballez soigneusement l'article
-2. Utilisez l'étiquette de retour jointe à votre colis (ou contactez-nous pour en recevoir une)
-3. Déposez le colis dans un point relais ou bureau de poste
-
-Le remboursement sera effectué sous 5-7 jours ouvrés après réception et vérification du colis.
-
-N'hésitez pas si vous avez des questions !
-
-Cordialement,
-L'équipe Avena Paris"""
-}
-
 
 class AIResponder:
-    """Gestionnaire IA pour classification et génération de réponses"""
+    """Gestionnaire IA pour classification et génération de réponses avec Gemini"""
 
     def __init__(self, api_key: str, company_name: str = "Avena Paris"):
         """
-        Initialise le responder IA
+        Initialise le responder IA avec Gemini
 
         Args:
-            api_key: Clé API Anthropic
+            api_key: Clé API Gemini
             company_name: Nom de l'entreprise pour les réponses
         """
-        self.client = anthropic.Anthropic(api_key=api_key)
+        self.api_key = api_key
         self.company_name = company_name
-        self.model = "claude-sonnet-4-20250514"  # Bon rapport qualité/prix
+        self.model = "gemini-2.0-flash"  # Modèle rapide et économique
+        self.base_url = "https://generativelanguage.googleapis.com/v1beta/models"
+
+    def _call_gemini(self, prompt: str, max_tokens: int = 1000) -> str:
+        """
+        Appelle l'API Gemini
+
+        Args:
+            prompt: Le prompt à envoyer
+            max_tokens: Nombre max de tokens en sortie
+
+        Returns:
+            La réponse textuelle de Gemini
+        """
+        url = f"{self.base_url}/{self.model}:generateContent?key={self.api_key}"
+
+        payload = {
+            "contents": [{
+                "parts": [{"text": prompt}]
+            }],
+            "generationConfig": {
+                "maxOutputTokens": max_tokens,
+                "temperature": 0.7
+            }
+        }
+
+        headers = {"Content-Type": "application/json"}
+
+        response = requests.post(url, json=payload, headers=headers, timeout=30)
+        response.raise_for_status()
+
+        data = response.json()
+
+        # Extrait le texte de la réponse
+        if "candidates" in data and len(data["candidates"]) > 0:
+            candidate = data["candidates"][0]
+            if "content" in candidate and "parts" in candidate["content"]:
+                return candidate["content"]["parts"][0]["text"].strip()
+
+        raise Exception("Réponse Gemini vide ou invalide")
 
     def detect_language(self, text: str) -> str:
         """
@@ -202,19 +177,14 @@ Réponds UNIQUEMENT avec un JSON : {{"category": "AUTO", "confidence": 0.95}} ou
 """
 
         try:
-            response = self.client.messages.create(
-                model=self.model,
-                max_tokens=100,
-                messages=[{"role": "user", "content": prompt}]
-            )
-
-            result_text = response.content[0].text.strip()
+            result_text = self._call_gemini(prompt, max_tokens=100)
 
             # Parse le JSON - nettoie si besoin
             if result_text.startswith("```"):
                 result_text = result_text.split("```")[1]
                 if result_text.startswith("json"):
                     result_text = result_text[4:]
+            result_text = result_text.strip().strip("```")
 
             result = json.loads(result_text)
 
@@ -293,7 +263,7 @@ Réponds UNIQUEMENT avec un JSON : {{"category": "AUTO", "confidence": 0.95}} ou
         }
         lang_name = lang_names.get(language, 'français')
 
-        # Construit le contexte pour Claude
+        # Construit le contexte pour Gemini
         context_parts = []
 
         # Infos client
@@ -414,13 +384,7 @@ CONSIGNES DE RÉDACTION :
 Rédige UNIQUEMENT la réponse en {lang_name}, sans commentaire ni explication."""
 
         try:
-            response = self.client.messages.create(
-                model=self.model,
-                max_tokens=1000,
-                messages=[{"role": "user", "content": prompt}]
-            )
-
-            generated_response = response.content[0].text.strip()
+            generated_response = self._call_gemini(prompt, max_tokens=1000)
             logger.info(f"Réponse générée ({len(generated_response)} caractères)")
             return generated_response
 
@@ -481,30 +445,39 @@ L'équipe {self.company_name}"""
 
 
 def test_ai_connection(api_key: str) -> Dict:
-    """Teste la connexion à l'API Claude"""
+    """Teste la connexion à l'API Gemini"""
     result = {
         'success': False,
         'message': ''
     }
 
     try:
-        client = anthropic.Anthropic(api_key=api_key)
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
 
-        # Test simple
-        response = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=50,
-            messages=[{"role": "user", "content": "Dis simplement 'Connexion OK'"}]
-        )
+        payload = {
+            "contents": [{
+                "parts": [{"text": "Dis simplement 'Connexion OK'"}]
+            }],
+            "generationConfig": {
+                "maxOutputTokens": 50
+            }
+        }
 
-        if response.content:
+        response = requests.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=10)
+        response.raise_for_status()
+
+        data = response.json()
+        if "candidates" in data and len(data["candidates"]) > 0:
             result['success'] = True
-            result['message'] = "Connexion à Claude réussie !"
+            result['message'] = "Connexion à Gemini réussie !"
         else:
-            result['message'] = "Réponse vide de Claude"
+            result['message'] = "Réponse vide de Gemini"
 
-    except anthropic.AuthenticationError:
-        result['message'] = "Clé API invalide"
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 401 or e.response.status_code == 403:
+            result['message'] = "Clé API invalide"
+        else:
+            result['message'] = f"Erreur HTTP: {e}"
     except Exception as e:
         result['message'] = f"Erreur: {str(e)}"
 

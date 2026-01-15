@@ -153,11 +153,13 @@ def get_all_shopify_handlers():
 
 
 def get_ai_responder():
-    """Lazy loading du responder IA"""
+    """Lazy loading du responder IA (Gemini)"""
     global ai_responder
     if ai_responder is None:
+        # Utilise Gemini en priorité, fallback sur Anthropic
+        api_key = app.config.get('GEMINI_API_KEY') or app.config.get('ANTHROPIC_API_KEY')
         ai_responder = AIResponder(
-            api_key=app.config['ANTHROPIC_API_KEY'],
+            api_key=api_key,
             company_name=app.config.get('COMPANY_NAME', 'Avena Paris')
         )
     return ai_responder
@@ -1484,11 +1486,12 @@ def test_connections():
     else:
         results['shopify'] = {'success': False, 'message': 'Aucun shop connectÃ©'}
 
-    # Test Claude
-    if app.config.get('ANTHROPIC_API_KEY'):
-        results['claude'] = test_ai_connection(app.config['ANTHROPIC_API_KEY'])
+    # Test Gemini (IA)
+    api_key = app.config.get('GEMINI_API_KEY') or app.config.get('ANTHROPIC_API_KEY')
+    if api_key:
+        results['gemini'] = test_ai_connection(api_key)
     else:
-        results['claude'] = {'success': False, 'message': 'Non configurÃ©'}
+        results['gemini'] = {'success': False, 'message': 'Non configuré'}
 
     all_ok = all(r.get('success') for r in results.values())
 

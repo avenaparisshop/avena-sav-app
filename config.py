@@ -41,7 +41,10 @@ class Config:
     SHOPIFY_SHOP_NAME = os.getenv('SHOPIFY_SHOP_NAME')
     SHOPIFY_ACCESS_TOKEN = os.getenv('SHOPIFY_ACCESS_TOKEN')  # Token legacy si disponible
 
-    # Claude / Anthropic
+    # Gemini (Google AI) - utilisé pour les réponses
+    GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+
+    # Anthropic (legacy - gardé pour compatibilité)
     ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
 
     # Automation
