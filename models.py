@@ -90,6 +90,47 @@ class Settings(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class SentEmail(db.Model):
+    """Modèle pour stocker les emails envoyés (réponses SAV)"""
+    __tablename__ = 'sent_emails'
+
+    id = db.Column(db.Integer, primary_key=True)
+    message_id = db.Column(db.String(255), unique=True, nullable=False)
+
+    # Destinataire
+    recipient_email = db.Column(db.String(255), nullable=False, index=True)
+    recipient_name = db.Column(db.String(255))
+
+    # Contenu
+    subject = db.Column(db.String(500))
+    body = db.Column(db.Text)
+    sent_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+    # Threading - pour lier à l'email original
+    in_reply_to = db.Column(db.String(255), index=True)  # Message-ID de l'email parent
+    references = db.Column(db.Text)  # Chain de références
+
+    # Lien avec l'email reçu (si on peut le retrouver)
+    original_email_id = db.Column(db.Integer, db.ForeignKey('emails.id'), nullable=True)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        """Convertit en dictionnaire pour l'API"""
+        return {
+            'id': self.id,
+            'message_id': self.message_id,
+            'recipient_email': self.recipient_email,
+            'recipient_name': self.recipient_name,
+            'subject': self.subject,
+            'body': self.body,
+            'sent_at': self.sent_at.isoformat() if self.sent_at else None,
+            'in_reply_to': self.in_reply_to,
+            'original_email_id': self.original_email_id,
+            'type': 'sent'  # Pour différencier des emails reçus
+        }
+
+
 class ShopifyToken(db.Model):
     """Tokens Shopify stockés en base de données (persistant)"""
     __tablename__ = 'shopify_tokens'

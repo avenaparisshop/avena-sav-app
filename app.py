@@ -3,6 +3,7 @@ Application principale Flask - Avena SAV
 Dashboard de gestion des emails SAV avec IA
 """
 import os
+import re
 from flask import Flask, render_template, request, jsonify, redirect, url_for
 from datetime import datetime
 import threading
@@ -11,7 +12,7 @@ import logging
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from config import get_config
-from models import db, Email, ShopifyToken
+from models import db, Email, ShopifyToken, SentEmail
 from modules.email_handler import ZohoEmailHandler, test_zoho_connection
 from modules.shopify_handler import ShopifyHandler, test_shopify_connection
 from modules.ai_responder import AIResponder, test_ai_connection
@@ -378,9 +379,21 @@ def get_emails():
 
     emails = query.order_by(Email.received_at.desc()).all()
 
+    # Ajoute l'info has_reply pour chaque email
+    emails_data = []
+    for e in emails:
+        email_dict = e.to_dict()
+        # Vérifie si on a une réponse envoyée pour cet email
+        has_reply = SentEmail.query.filter(
+            (SentEmail.original_email_id == e.id) |
+            (SentEmail.recipient_email == e.sender_email)
+        ).first() is not None
+        email_dict['has_reply'] = has_reply
+        emails_data.append(email_dict)
+
     return jsonify({
         'success': True,
-        'emails': [e.to_dict() for e in emails],
+        'emails': emails_data,
         'count': len(emails)
     })
 
@@ -964,6 +977,242 @@ def extract_sent_emails():
 
     except Exception as e:
         logger.error(f"Erreur extraction emails envoyes: {e}")
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        }), 500
+
+
+@app.route('/api/fetch-sent-emails', methods=['POST'])
+def fetch_sent_emails():
+    """Importe les emails envoyés depuis le dossier Sent pour les lier aux conversations"""
+    try:
+        handler = get_email_handler()
+
+        # Dossiers possibles pour les emails envoyés (Zoho)
+        sent_folders = ["Sent", "Sent Items", "Sent Mail", "Envoye", "Envoyes", "Envoyé", "Envoyés"]
+
+        if not handler.connect_imap():
+            return jsonify({
+                'success': False,
+                'message': 'Erreur connexion IMAP'
+            }), 500
+
+        sent_emails_data = []
+
+        # Essaie chaque dossier jusqu'à trouver le bon
+        for folder in sent_folders:
+            try:
+                handler.disconnect_imap()
+                handler.connect_imap()
+
+                # Sélectionne le dossier
+                status, _ = handler.imap_connection.select(folder)
+                if status != 'OK':
+                    continue
+
+                logger.info(f"Dossier Sent trouvé: {folder}")
+
+                # Récupère les emails envoyés (les 200 plus récents)
+                status, messages = handler.imap_connection.search(None, 'ALL')
+                if status != 'OK':
+                    continue
+
+                email_ids = messages[0].split()
+                # Prend les 200 plus récents
+                email_ids = list(reversed(email_ids[-200:]))
+
+                import email as email_lib
+
+                for email_id_bytes in email_ids:
+                    try:
+                        status, msg_data = handler.imap_connection.fetch(email_id_bytes, '(RFC822)')
+                        if status != 'OK':
+                            continue
+
+                        raw_email = msg_data[0][1]
+                        msg = email_lib.message_from_bytes(raw_email)
+
+                        # Parse les headers
+                        to_header = msg.get('To', '')
+                        to_decoded = handler._decode_header_value(to_header)
+                        # Extrait email du format "Name <email>"
+                        to_match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', to_decoded)
+                        recipient_email = to_match.group(0) if to_match else to_decoded
+
+                        to_name_match = re.match(r'^(.+?)\s*<', to_decoded)
+                        recipient_name = to_name_match.group(1).strip().strip('"') if to_name_match else ''
+
+                        subject = handler._decode_header_value(msg.get('Subject', ''))
+                        body = handler._extract_email_body(msg)
+                        message_id = msg.get('Message-ID', '')
+                        in_reply_to = msg.get('In-Reply-To', '')
+                        references = msg.get('References', '')
+
+                        # Date d'envoi
+                        date_str = msg.get('Date', '')
+                        try:
+                            sent_at = email_lib.utils.parsedate_to_datetime(date_str)
+                        except:
+                            sent_at = datetime.utcnow()
+
+                        sent_emails_data.append({
+                            'message_id': message_id,
+                            'recipient_email': recipient_email,
+                            'recipient_name': recipient_name,
+                            'subject': subject,
+                            'body': body,
+                            'sent_at': sent_at,
+                            'in_reply_to': in_reply_to,
+                            'references': references
+                        })
+
+                    except Exception as e:
+                        logger.error(f"Erreur parsing email envoyé: {e}")
+                        continue
+
+                break  # On a trouvé le dossier Sent
+
+            except Exception as e:
+                logger.debug(f"Dossier {folder} non accessible: {e}")
+                continue
+
+        handler.disconnect_imap()
+
+        if not sent_emails_data:
+            return jsonify({
+                'success': False,
+                'message': 'Aucun email envoyé trouvé'
+            })
+
+        # Enregistre les emails en base
+        imported = 0
+        linked = 0
+
+        for email_data in sent_emails_data:
+            # Vérifie si déjà en base
+            existing = SentEmail.query.filter_by(message_id=email_data['message_id']).first()
+            if existing:
+                continue
+
+            # Essaie de lier à l'email original via In-Reply-To
+            original_email_id = None
+            if email_data['in_reply_to']:
+                original = Email.query.filter_by(message_id=email_data['in_reply_to']).first()
+                if original:
+                    original_email_id = original.id
+                    linked += 1
+
+            # Si pas trouvé via In-Reply-To, essaie via l'adresse email et le sujet
+            if not original_email_id and email_data['recipient_email']:
+                # Cherche un email reçu du même expéditeur avec un sujet similaire
+                subject_clean = email_data['subject'].replace('Re: ', '').replace('RE: ', '').strip()
+                possible_original = Email.query.filter(
+                    Email.sender_email == email_data['recipient_email'],
+                    Email.subject.like(f'%{subject_clean[:30]}%')
+                ).order_by(Email.received_at.desc()).first()
+
+                if possible_original:
+                    original_email_id = possible_original.id
+                    linked += 1
+
+            sent_record = SentEmail(
+                message_id=email_data['message_id'],
+                recipient_email=email_data['recipient_email'],
+                recipient_name=email_data['recipient_name'],
+                subject=email_data['subject'],
+                body=email_data['body'],
+                sent_at=email_data['sent_at'],
+                in_reply_to=email_data['in_reply_to'],
+                references=email_data['references'],
+                original_email_id=original_email_id
+            )
+
+            db.session.add(sent_record)
+            imported += 1
+
+        db.session.commit()
+
+        logger.info(f"Emails envoyés importés: {imported}, liés: {linked}")
+
+        return jsonify({
+            'success': True,
+            'message': f'{imported} emails envoyés importés ({linked} liés à des conversations)',
+            'imported': imported,
+            'linked': linked
+        })
+
+    except Exception as e:
+        import traceback
+        logger.error(f"Erreur fetch sent emails: {e}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        }), 500
+
+
+@app.route('/api/emails/<int:email_id>/conversation', methods=['GET'])
+def get_email_conversation(email_id):
+    """Récupère l'historique complet d'une conversation (emails reçus + envoyés)"""
+    try:
+        email = Email.query.get_or_404(email_id)
+
+        conversation = []
+
+        # 1. Ajoute l'email principal (reçu)
+        email_dict = email.to_dict()
+        email_dict['type'] = 'received'
+        conversation.append(email_dict)
+
+        # 2. Cherche les réponses envoyées liées à cet email
+        # Via original_email_id
+        sent_replies = SentEmail.query.filter_by(original_email_id=email_id).all()
+        for sent in sent_replies:
+            conversation.append(sent.to_dict())
+
+        # 3. Cherche aussi via l'adresse email (même conversation)
+        # Emails reçus de la même personne
+        other_received = Email.query.filter(
+            Email.sender_email == email.sender_email,
+            Email.id != email_id
+        ).order_by(Email.received_at).all()
+
+        for other in other_received:
+            other_dict = other.to_dict()
+            other_dict['type'] = 'received'
+            # Évite les doublons
+            if not any(c.get('message_id') == other_dict['message_id'] for c in conversation):
+                conversation.append(other_dict)
+
+        # Emails envoyés à la même personne
+        other_sent = SentEmail.query.filter(
+            SentEmail.recipient_email == email.sender_email,
+            SentEmail.original_email_id != email_id  # Pas ceux déjà ajoutés
+        ).all()
+
+        for sent in other_sent:
+            sent_dict = sent.to_dict()
+            # Évite les doublons
+            if not any(c.get('message_id') == sent_dict['message_id'] for c in conversation):
+                conversation.append(sent_dict)
+
+        # Trie par date
+        conversation.sort(key=lambda x: x.get('received_at') or x.get('sent_at') or '')
+
+        # Détermine si on a répondu
+        has_reply = any(c.get('type') == 'sent' for c in conversation)
+
+        return jsonify({
+            'success': True,
+            'email_id': email_id,
+            'conversation': conversation,
+            'has_reply': has_reply,
+            'message_count': len(conversation)
+        })
+
+    except Exception as e:
+        logger.error(f"Erreur get conversation: {e}")
         return jsonify({
             'success': False,
             'message': str(e)

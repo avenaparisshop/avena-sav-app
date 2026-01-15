@@ -73,6 +73,10 @@
                     <i class="fas fa-sync-alt mr-2"></i>
                     Actualiser
                 </button>
+                <button onclick="fetchSentEmails()" id="importSentBtn" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg flex items-center text-sm" title="Importer les réponses envoyées">
+                    <i class="fas fa-reply mr-2"></i>
+                    Importer réponses
+                </button>
                 <a href="/stores" class="text-gray-600 hover:text-gray-800 mr-2" title="Shops connectés">
                     <i class="fas fa-shopping-bag text-xl"></i>
                 </a>
@@ -371,6 +375,7 @@
                                     ${categoryLabels[email.category] || '📋 Autre'}
                                 </span>
                                 ${email.order_number ? `<span class="text-xs text-gray-400">#${email.order_number}</span>` : ''}
+                                ${email.has_reply ? '<span class="text-xs text-green-600 font-medium"><i class="fas fa-check-circle"></i> Répondu</span>' : ''}
                                 ${!email.is_read ? '<span class="w-2 h-2 bg-blue-500 rounded-full"></span>' : ''}
                             </div>
                             <p class="font-medium text-gray-800 truncate text-sm">${email.sender_name || email.sender_email}</p>
@@ -462,6 +467,40 @@
             document.getElementById('noSelection').classList.add('hidden');
             document.getElementById('emailContent').classList.remove('hidden');
 
+            // Charge l'historique de conversation
+            let conversationHtml = '';
+            try {
+                const convRes = await fetch(`/api/emails/${emailId}/conversation`);
+                const convData = await convRes.json();
+
+                if (convData.success && convData.conversation && convData.conversation.length > 1) {
+                    // On a une conversation avec plusieurs messages
+                    conversationHtml = `
+                        <div class="p-4 border-b bg-purple-50">
+                            <h4 class="font-medium text-purple-700 mb-3">
+                                <i class="fas fa-comments mr-2"></i>Historique de la conversation (${convData.message_count} messages)
+                            </h4>
+                            <div class="space-y-3 max-h-64 overflow-y-auto">
+                                ${convData.conversation.map(msg => `
+                                    <div class="p-3 rounded-lg ${msg.type === 'sent' ? 'bg-green-100 ml-8' : 'bg-white mr-8'} border">
+                                        <div class="flex items-center justify-between mb-1">
+                                            <span class="text-xs font-medium ${msg.type === 'sent' ? 'text-green-700' : 'text-gray-700'}">
+                                                ${msg.type === 'sent' ? '<i class="fas fa-reply mr-1"></i>Notre réponse' : '<i class="fas fa-user mr-1"></i>' + (msg.sender_name || 'Client')}
+                                            </span>
+                                            <span class="text-xs text-gray-400">${formatDate(msg.sent_at || msg.received_at)}</span>
+                                        </div>
+                                        <p class="text-xs text-gray-500 truncate">${escapeHtml(msg.subject || '')}</p>
+                                        <p class="text-sm text-gray-700 line-clamp-2">${escapeHtml((msg.body || '').substring(0, 200))}${(msg.body || '').length > 200 ? '...' : ''}</p>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+            } catch (e) {
+                console.log('Pas d\'historique de conversation', e);
+            }
+
             document.getElementById('emailContent').innerHTML = `
                 <!-- Header avec bouton retour -->
                 <div class="p-4 border-b bg-gray-50 flex items-center justify-between">
@@ -475,6 +514,7 @@
                                     ${categoryLabels[email.category] || 'Autre'}
                                 </span>
                                 ${email.order_number ? `<span class="text-sm text-pink-500"><i class="fas fa-shopping-bag mr-1"></i>#${email.order_number}</span>` : ''}
+                                ${email.has_reply ? '<span class="text-sm text-green-600"><i class="fas fa-check-circle mr-1"></i>Répondu</span>' : ''}
                             </div>
                             <p class="font-semibold text-gray-800 mt-1">${email.sender_name || 'Client'}</p>
                             <p class="text-sm text-gray-500">${email.sender_email}</p>
@@ -485,6 +525,9 @@
 
                 <!-- Contenu scrollable -->
                 <div class="flex-1 overflow-y-auto">
+                    <!-- Historique de conversation (si existe) -->
+                    ${conversationHtml}
+
                     <!-- Message du client -->
                     <div class="p-4 border-b">
                         <h4 class="font-medium text-gray-700 mb-3">
@@ -717,6 +760,30 @@
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fas fa-sync-alt mr-2"></i>Actualiser';
+            }
+        }
+
+        // Fetch sent emails (réponses)
+        async function fetchSentEmails() {
+            const btn = document.getElementById('importSentBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Import...';
+
+            try {
+                const res = await fetch('/api/fetch-sent-emails', { method: 'POST' });
+                const data = await res.json();
+
+                if (data.success) {
+                    showToast(data.message);
+                    await loadEmails();  // Rafraîchit pour voir les indicateurs "Répondu"
+                } else {
+                    showToast(data.message || 'Aucun email envoyé trouvé', 'error');
+                }
+            } catch (e) {
+                showToast('Erreur lors de l\'import', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-reply mr-2"></i>Importer réponses';
             }
         }
 
