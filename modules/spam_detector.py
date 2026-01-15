@@ -765,8 +765,9 @@ def is_fake_brand_email(sender_email: str, subject: str, sender_name: str, body:
     full_text = f"{subject_lower} {name_lower} {body_lower}"
 
     # Liste des marques à vérifier
+    # ATTENTION: Seuls les mots-clés SPÉCIFIQUES à la marque, pas génériques comme "your store"
     brand_keywords = {
-        'shopify': ['shopify', 'shop.app', 'your store', 'your shop', 'e-commerce store', 'ecommerce store'],
+        'shopify': ['shopify', 'shop.app'],
         'meta': ['meta business', 'meta ads', 'meta support', 'meta platform'],
         'facebook': ['facebook', 'fb ads', 'fb business', 'facebook page', 'facebook ads'],
         'instagram': ['instagram', 'ig business', 'instagram account'],
