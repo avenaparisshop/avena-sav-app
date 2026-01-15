@@ -97,15 +97,7 @@
             </div>
             <div class="flex items-center">
                 <span class="font-bold text-green-500 mr-1" id="stat-sent">-</span>
-                <span class="text-gray-500">Envoyés</span>
-            </div>
-            <div class="flex items-center">
-                <span class="font-bold text-blue-500 mr-1" id="stat-auto">-</span>
-                <span class="text-gray-500">Auto</span>
-            </div>
-            <div class="flex items-center">
-                <span class="font-bold text-gray-400 mr-1" id="stat-ignored">-</span>
-                <span class="text-gray-500">Ignorés</span>
+                <span class="text-gray-500">Répondu</span>
             </div>
             <div class="flex items-center">
                 <span class="font-bold text-gray-800 mr-1" id="stat-total">-</span>
@@ -142,9 +134,7 @@
             <div class="p-2 border-b flex items-center justify-between bg-white">
                 <div class="flex space-x-1">
                     <button onclick="setStatusFilter('pending')" id="statusPending" class="status-btn text-xs px-3 py-1 rounded bg-yellow-100 text-yellow-700 font-medium">En attente</button>
-                    <button onclick="setStatusFilter('sent')" id="statusSent" class="status-btn text-xs px-3 py-1 rounded bg-gray-100 text-gray-600">Envoyés</button>
-                    <button onclick="setStatusFilter('ignored')" id="statusIgnored" class="status-btn text-xs px-3 py-1 rounded bg-gray-100 text-gray-600">Ignorés</button>
-                    <button onclick="setStatusFilter('all')" id="statusAll" class="status-btn text-xs px-3 py-1 rounded bg-gray-100 text-gray-600">Tous</button>
+                    <button onclick="setStatusFilter('replied')" id="statusReplied" class="status-btn text-xs px-3 py-1 rounded bg-gray-100 text-gray-600">Répondu</button>
                 </div>
             </div>
             <div id="emailList" class="email-list flex-1 overflow-y-auto">
@@ -339,32 +329,32 @@
             setTimeout(() => toast.remove(), 4000);
         }
 
-        // Charger les stats
-        async function loadStats() {
-            try {
-                const res = await fetch('/api/stats');
-                const data = await res.json();
+        // Charger les stats (basé sur has_reply)
+        function loadStats() {
+            const total = allEmails.length;
+            const replied = allEmails.filter(e => e.has_reply).length;
+            const pending = total - replied;
 
-                if (data.success) {
-                    document.getElementById('stat-pending').textContent = data.stats.pending;
-                    document.getElementById('stat-sent').textContent = data.stats.sent;
-                    document.getElementById('stat-auto').textContent = data.stats.auto_sent;
-                    document.getElementById('stat-ignored').textContent = data.stats.ignored;
-                    document.getElementById('stat-total').textContent = data.stats.total;
-                }
-            } catch (e) {
-                console.error('Erreur stats:', e);
-            }
+            document.getElementById('stat-pending').textContent = pending;
+            document.getElementById('stat-sent').textContent = replied;
+            document.getElementById('stat-total').textContent = total;
         }
 
         // Afficher la liste filtrée selon le filtre principal (ATTENTE, AUTO, SPAM)
         function renderEmailList() {
             const list = document.getElementById('emailList');
 
-            // Filtre les emails selon le filtre principal actif
+            // Filtre les emails selon le filtre principal actif (catégorie)
             let filteredEmails = allEmails.filter(email => {
                 return getEmailMainCategory(email) === currentMainFilter;
             });
+
+            // Filtre secondaire: en attente (pas répondu) ou répondu (has_reply)
+            if (currentStatusFilter === 'pending') {
+                filteredEmails = filteredEmails.filter(email => !email.has_reply);
+            } else if (currentStatusFilter === 'replied') {
+                filteredEmails = filteredEmails.filter(email => email.has_reply);
+            }
 
             // Groupe les emails par sender_email (un seul contact par expéditeur)
             // Garde l'email le plus récent pour chaque expéditeur
@@ -430,12 +420,12 @@
             `}).join('');
         }
 
-        // Charger les emails depuis l'API
+        // Charger les emails depuis l'API (toujours tous, filtrage côté client)
         async function loadEmails() {
             const list = document.getElementById('emailList');
 
             try {
-                const res = await fetch(`/api/emails?status=${currentStatusFilter}`);
+                const res = await fetch('/api/emails?status=all');
                 const data = await res.json();
 
                 if (data.success) {
@@ -1126,10 +1116,8 @@
 
         // Init
         document.addEventListener('DOMContentLoaded', async () => {
-            loadStats();
-            await loadEmails();
-
-            // Met à jour le compteur du bouton Classifier (mais ne lance PAS auto)
+            await loadEmails();  // Charge les emails d'abord
+            loadStats();  // Puis calcule les stats
             updateClassifyCount();
         });
     </script>
