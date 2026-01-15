@@ -1348,13 +1348,17 @@ def debug_shopify_status():
     })
 
 
-@app.route('/api/debug/search-customer', methods=['POST'])
+@app.route('/api/debug/search-customer', methods=['GET', 'POST'])
 def debug_search_customer():
     """Debug: Teste la recherche d'un client dans tous les shops"""
     try:
-        data = request.get_json() or {}
-        email = data.get('email', '')
-        name = data.get('name', '')
+        if request.method == 'GET':
+            email = request.args.get('email', '')
+            name = request.args.get('name', '')
+        else:
+            data = request.get_json() or {}
+            email = data.get('email', '')
+            name = data.get('name', '')
 
         if not email and not name:
             return jsonify({
