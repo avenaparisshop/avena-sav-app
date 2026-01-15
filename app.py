@@ -383,10 +383,11 @@ def get_emails():
     emails_data = []
     for e in emails:
         email_dict = e.to_dict()
-        # Vérifie si on a une réponse envoyée pour cet email
+        # Vérifie si on a une réponse envoyée pour cet email - CASE INSENSITIVE
+        sender_lower = e.sender_email.lower() if e.sender_email else ''
         has_reply = SentEmail.query.filter(
             (SentEmail.original_email_id == e.id) |
-            (SentEmail.recipient_email == e.sender_email)
+            (db.func.lower(SentEmail.recipient_email) == sender_lower)
         ).first() is not None
         email_dict['has_reply'] = has_reply
         emails_data.append(email_dict)
@@ -395,6 +396,28 @@ def get_emails():
         'success': True,
         'emails': emails_data,
         'count': len(emails)
+    })
+
+
+@app.route('/api/debug/sent-emails', methods=['GET'])
+def debug_sent_emails():
+    """Debug: Liste des emails envoyés et correspondances"""
+    sent_emails = SentEmail.query.limit(20).all()
+    received_emails = Email.query.limit(20).all()
+
+    # Trouve les correspondances
+    sent_recipients = set(s.recipient_email.lower() for s in sent_emails if s.recipient_email)
+    received_senders = set(e.sender_email.lower() for e in received_emails if e.sender_email)
+
+    matches = sent_recipients.intersection(received_senders)
+
+    return jsonify({
+        'sent_count': SentEmail.query.count(),
+        'received_count': Email.query.count(),
+        'sent_recipients_sample': list(sent_recipients)[:10],
+        'received_senders_sample': list(received_senders)[:10],
+        'matches': list(matches),
+        'match_count': len(matches)
     })
 
 
@@ -1164,6 +1187,7 @@ def get_email_conversation(email_id):
     """Récupère l'historique complet d'une conversation (emails reçus + envoyés)"""
     try:
         email = Email.query.get_or_404(email_id)
+        sender_email_lower = email.sender_email.lower() if email.sender_email else ''
 
         conversation = []
 
@@ -1178,10 +1202,10 @@ def get_email_conversation(email_id):
         for sent in sent_replies:
             conversation.append(sent.to_dict())
 
-        # 3. Cherche aussi via l'adresse email (même conversation)
+        # 3. Cherche aussi via l'adresse email (même conversation) - CASE INSENSITIVE
         # Emails reçus de la même personne
         other_received = Email.query.filter(
-            Email.sender_email == email.sender_email,
+            db.func.lower(Email.sender_email) == sender_email_lower,
             Email.id != email_id
         ).order_by(Email.received_at).all()
 
@@ -1192,11 +1216,12 @@ def get_email_conversation(email_id):
             if not any(c.get('message_id') == other_dict['message_id'] for c in conversation):
                 conversation.append(other_dict)
 
-        # Emails envoyés à la même personne
+        # Emails envoyés à la même personne - CASE INSENSITIVE
         other_sent = SentEmail.query.filter(
-            SentEmail.recipient_email == email.sender_email,
-            SentEmail.original_email_id != email_id  # Pas ceux déjà ajoutés
+            db.func.lower(SentEmail.recipient_email) == sender_email_lower
         ).all()
+
+        logger.info(f"Conversation pour {email_id}: sender={sender_email_lower}, found {len(other_sent)} sent emails")
 
         for sent in other_sent:
             sent_dict = sent.to_dict()
