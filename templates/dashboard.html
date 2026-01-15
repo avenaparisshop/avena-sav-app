@@ -371,12 +371,8 @@
                     <div class="flex items-start justify-between">
                         <div class="flex-1 min-w-0">
                             <div class="flex items-center space-x-2 mb-1">
-                                <span class="category-badge ${categoryColors[email.category] || categoryColors['AUTRE']}">
-                                    ${categoryLabels[email.category] || '📋 Autre'}
-                                </span>
-                                ${email.order_number ? `<span class="text-xs text-gray-400">#${email.order_number}</span>` : ''}
-                                ${email.has_reply ? '<span class="text-xs text-green-600 font-medium"><i class="fas fa-check-circle"></i> Répondu</span>' : ''}
-                                ${!email.is_read ? '<span class="w-2 h-2 bg-blue-500 rounded-full"></span>' : ''}
+                                ${email.order_number ? `<span class="text-xs text-pink-500 font-medium">#${email.order_number}</span>` : ''}
+                                ${!email.has_reply ? '<span class="w-2 h-2 bg-blue-500 rounded-full" title="Non répondu"></span>' : ''}
                             </div>
                             <p class="font-medium text-gray-800 truncate text-sm">${email.sender_name || email.sender_email}</p>
                             <p class="email-subject text-xs text-gray-500 truncate">${email.subject}</p>
@@ -576,11 +572,8 @@
                         </button>
                         <div>
                             <div class="flex items-center space-x-2">
-                                <span class="category-badge ${categoryColors[email.category] || categoryColors['AUTRE']}">
-                                    ${categoryLabels[email.category] || 'Autre'}
-                                </span>
-                                ${email.order_number ? `<span class="text-sm text-pink-500"><i class="fas fa-shopping-bag mr-1"></i>#${email.order_number}</span>` : ''}
-                                ${email.has_reply ? '<span class="text-sm text-green-600"><i class="fas fa-check-circle mr-1"></i>Répondu</span>' : ''}
+                                ${email.order_number ? `<span class="text-sm text-pink-500 font-medium">#${email.order_number}</span>` : ''}
+                                ${!email.has_reply ? '<span class="w-2 h-2 bg-blue-500 rounded-full" title="Non répondu"></span>' : ''}
                             </div>
                             <p class="font-semibold text-gray-800 mt-1">${email.sender_name || 'Client'}</p>
                             <p class="text-sm text-gray-500">${email.sender_email}</p>
