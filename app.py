@@ -695,6 +695,167 @@ def generate_email_response(email_id):
         }), 500
 
 
+@app.route('/api/extract-sent-emails', methods=['POST'])
+def extract_sent_emails():
+    """Extrait les emails envoyes pour l'apprentissage IA"""
+    import re
+    import json
+
+    try:
+        handler = get_email_handler()
+
+        # Dossiers possibles pour les emails envoyes
+        sent_folders = ["Sent", "Envoye", "Envoyes", "Sent Items", "Sent Mail"]
+
+        sent_emails = []
+
+        for folder in sent_folders:
+            handler.disconnect_imap()
+            handler.connect_imap()
+            emails = handler.fetch_unread_emails(folder=folder, limit=500)
+            if emails:
+                logger.info(f"Trouve {len(emails)} emails dans {folder}")
+                sent_emails.extend(emails)
+                break
+
+        if not sent_emails:
+            return jsonify({
+                'success': False,
+                'message': 'Aucun email envoye trouve'
+            })
+
+        # Analyse et structure les donnees pour l'apprentissage
+        training_data = []
+
+        # Patterns pour categoriser les reponses
+        categories = {
+            'SUIVI': [
+                r'suivi', r'livraison', r'colis', r'expedi', r'tracking',
+                r'ou en est', r'quand.*recev', r'delai', r'transporteur'
+            ],
+            'RETOUR': [
+                r'retour', r'rembours', r'echang', r'renvoy', r'renvoie'
+            ],
+            'PROBLEME': [
+                r'probleme', r'defectueu', r'casse', r'abime', r'erreur',
+                r'manqu', r'incomplet', r'mauvais', r'endommage'
+            ],
+            'QUESTION': [
+                r'question', r'renseign', r'information', r'savoir'
+            ],
+            'MODIFICATION': [
+                r'modifi', r'chang', r'annul', r'adresse', r'commande'
+            ]
+        }
+
+        for email_data in sent_emails:
+            subject = email_data.get('subject', '') or ''
+            body = email_data.get('body', '') or ''
+            recipient = email_data.get('sender_email', '')
+
+            if not body.strip():
+                continue
+
+            # Determine la categorie
+            detected_category = 'AUTRE'
+            subject_body = (subject + ' ' + body).lower()
+
+            for cat, patterns in categories.items():
+                for pattern in patterns:
+                    if re.search(pattern, subject_body, re.IGNORECASE):
+                        detected_category = cat
+                        break
+                if detected_category != 'AUTRE':
+                    break
+
+            # Extrait le numero de commande
+            order_match = re.search(r'#?(\d{4,6})', subject + ' ' + body)
+            order_number = order_match.group(1) if order_match else None
+
+            training_entry = {
+                'date': email_data.get('received_at').isoformat() if email_data.get('received_at') else None,
+                'recipient': recipient,
+                'subject': subject,
+                'body': body,
+                'category': detected_category,
+                'order_number': order_number,
+                'word_count': len(body.split())
+            }
+
+            training_data.append(training_entry)
+
+        # Statistiques
+        stats = {
+            'total_emails': len(training_data),
+            'by_category': {}
+        }
+
+        for entry in training_data:
+            cat = entry['category']
+            stats['by_category'][cat] = stats['by_category'].get(cat, 0) + 1
+
+        handler.disconnect_imap()
+
+        return jsonify({
+            'success': True,
+            'stats': stats,
+            'emails': training_data,
+            'message': f'{len(training_data)} emails extraits pour apprentissage'
+        })
+
+    except Exception as e:
+        logger.error(f"Erreur extraction emails envoyes: {e}")
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        }), 500
+
+
+@app.route('/api/emails/<int:email_id>/send-custom', methods=['POST'])
+def send_custom_response(email_id):
+    """Envoie une reponse personnalisee (modifiee par l'utilisateur)"""
+    email_record = Email.query.get_or_404(email_id)
+
+    data = request.get_json()
+    if not data or not data.get('response'):
+        return jsonify({
+            'success': False,
+            'message': 'Reponse manquante'
+        }), 400
+
+    response_text = data['response']
+
+    # Marque comme modifie
+    email_record.modified_before_send = True
+    email_record.generated_response = response_text
+
+    # Envoie l'email
+    handler = get_email_handler()
+    subject = f"Re: {email_record.subject}"
+
+    success = handler.send_email(
+        to_email=email_record.sender_email,
+        subject=subject,
+        body=response_text,
+        reply_to_message_id=email_record.message_id
+    )
+
+    if success:
+        email_record.status = 'sent'
+        email_record.sent_at = datetime.utcnow()
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': f'Email envoye a {email_record.sender_email}'
+        })
+    else:
+        return jsonify({
+            'success': False,
+            'message': 'Erreur lors de l\'envoi'
+        }), 500
+
+
 @app.route('/api/stats', methods=['GET'])
 def get_stats():
     """RÃ©cupÃ¨re les statistiques"""

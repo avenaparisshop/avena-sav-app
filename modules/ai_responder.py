@@ -10,14 +10,109 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-# Catégories de demandes SAV
+# Catégories de demandes SAV avec type de traitement
+# AUTO = L'IA peut répondre automatiquement (avec infos Parcelpanel)
+# MANUAL = Nécessite validation humaine avant envoi
 CATEGORIES = {
-    "SUIVI": "Demande de suivi de commande (où est ma commande, délai de livraison)",
-    "RETOUR": "Demande de retour, échange ou remboursement",
-    "PROBLEME": "Problème avec un produit (défectueux, ne correspond pas, colis endommagé)",
-    "QUESTION": "Question générale sur les produits, la marque, ou autre",
-    "MODIFICATION": "Demande de modification de commande (adresse, annulation)",
-    "AUTRE": "Autre type de demande ne rentrant pas dans les catégories précédentes"
+    "SUIVI": {
+        "description": "Demande de suivi de commande (où est ma commande, délai de livraison)",
+        "type": "AUTO",  # Auto si tracking disponible
+        "requires_tracking": True
+    },
+    "QUESTION_PRODUIT": {
+        "description": "Question sur les produits (taille, couleur, disponibilité, composition)",
+        "type": "AUTO",  # IA peut répondre avec infos produit
+        "requires_tracking": False
+    },
+    "LIVRAISON": {
+        "description": "Question sur la livraison (délais, transporteurs, zones)",
+        "type": "AUTO",  # Réponses standardisées
+        "requires_tracking": False
+    },
+    "RETOUR": {
+        "description": "Demande de retour, échange ou remboursement",
+        "type": "MANUAL",  # Nécessite validation humaine
+        "requires_tracking": False
+    },
+    "PROBLEME": {
+        "description": "Problème avec un produit (défectueux, ne correspond pas, colis endommagé)",
+        "type": "MANUAL",  # Nécessite validation humaine
+        "requires_tracking": False
+    },
+    "MODIFICATION": {
+        "description": "Demande de modification de commande (adresse, annulation)",
+        "type": "MANUAL",  # Nécessite validation humaine
+        "requires_tracking": False
+    },
+    "AUTRE": {
+        "description": "Autre type de demande ne rentrant pas dans les catégories précédentes",
+        "type": "MANUAL",  # Par défaut, validation humaine
+        "requires_tracking": False
+    }
+}
+
+# Exemples de réponses pour chaque catégorie (style Avena Paris)
+# Ces exemples aident l'IA à reproduire le ton et le style
+RESPONSE_EXAMPLES = {
+    "SUIVI": """Bonjour,
+
+Merci pour votre message !
+
+Votre commande #{order_number} a bien été expédiée et est actuellement {status}.
+
+Vous pouvez suivre votre colis en temps réel via ce lien : {tracking_url}
+
+La livraison est estimée pour le {estimated_delivery}.
+
+N'hésitez pas si vous avez d'autres questions !
+
+Bonne journée,
+L'équipe Avena Paris""",
+
+    "QUESTION_PRODUIT": """Bonjour,
+
+Merci pour votre intérêt pour nos produits !
+
+{answer_to_question}
+
+N'hésitez pas à nous contacter si vous avez d'autres questions, nous sommes là pour vous aider !
+
+À très vite sur notre boutique,
+L'équipe Avena Paris""",
+
+    "LIVRAISON": """Bonjour,
+
+Merci pour votre message !
+
+Concernant nos délais de livraison :
+- France métropolitaine : 2-4 jours ouvrés
+- Europe : 4-7 jours ouvrés
+- International : 7-14 jours ouvrés
+
+Nous expédions via Colissimo, Mondial Relay ou Chronopost selon votre choix.
+
+Dès que votre commande sera expédiée, vous recevrez un email avec le numéro de suivi.
+
+Belle journée,
+L'équipe Avena Paris""",
+
+    "RETOUR": """Bonjour,
+
+Nous avons bien reçu votre demande de retour.
+
+Vous disposez de 14 jours pour nous retourner votre article dans son état d'origine, non porté et avec les étiquettes.
+
+Voici la procédure :
+1. Emballez soigneusement l'article
+2. Utilisez l'étiquette de retour jointe à votre colis (ou contactez-nous pour en recevoir une)
+3. Déposez le colis dans un point relais ou bureau de poste
+
+Le remboursement sera effectué sous 5-7 jours ouvrés après réception et vérification du colis.
+
+N'hésitez pas si vous avez des questions !
+
+Cordialement,
+L'équipe Avena Paris"""
 }
 
 
@@ -82,22 +177,29 @@ class AIResponder:
         Returns:
             Tuple (catégorie, score de confiance)
         """
-        prompt = f"""Tu es un assistant spécialisé dans la classification des emails de service client pour une boutique e-commerce de mode/beauté.
+        prompt = f"""Tu es un assistant spécialisé dans la classification des emails de service client pour Avena Paris, une boutique e-commerce de mode/beauté.
 
 Analyse cet email et classifie-le dans UNE des catégories suivantes :
-- SUIVI : Demande de suivi de commande (où est ma commande, délai de livraison)
+
+CATÉGORIES AUTO (l'IA peut répondre automatiquement) :
+- SUIVI : Demande de suivi de commande existante (où est ma commande, tracking, délai restant)
+- QUESTION_PRODUIT : Question sur les produits (taille, couleur, disponibilité, composition, conseils)
+- LIVRAISON : Question générale sur la livraison (délais moyens, transporteurs, zones de livraison)
+
+CATÉGORIES MANUELLES (nécessite validation humaine) :
 - RETOUR : Demande de retour, échange ou remboursement
-- PROBLEME : Problème avec un produit (défectueux, ne correspond pas, colis endommagé)
-- QUESTION : Question générale sur les produits, la marque
-- MODIFICATION : Demande de modification de commande (adresse, annulation)
-- AUTRE : Autre type de demande
+- PROBLEME : Problème avec un produit ou commande (défectueux, erreur, colis endommagé)
+- MODIFICATION : Demande de modification de commande (adresse, annulation, changement)
+- AUTRE : Autre type de demande (réclamation, partenariat, etc.)
 
 EMAIL À CLASSIFIER :
 Sujet : {subject}
 Corps : {body}
 
 Réponds UNIQUEMENT avec un JSON de cette forme :
-{{"category": "CATEGORIE", "confidence": 0.95, "reason": "courte explication"}}
+{{"category": "CATEGORIE", "confidence": 0.95, "reason": "courte explication", "auto_eligible": true}}
+
+Note: auto_eligible = true si c'est une catégorie AUTO et que l'IA peut répondre sans risque.
 """
 
         try:
@@ -123,7 +225,11 @@ Réponds UNIQUEMENT avec un JSON de cette forme :
 
             # Valide la catégorie
             if category not in CATEGORIES:
-                category = "AUTRE"
+                # Mapping des anciennes catégories
+                if category == "QUESTION":
+                    category = "QUESTION_PRODUIT"
+                else:
+                    category = "AUTRE"
 
             logger.info(f"Email classifié: {category} (confiance: {confidence})")
             return category, confidence
@@ -131,6 +237,34 @@ Réponds UNIQUEMENT avec un JSON de cette forme :
         except Exception as e:
             logger.error(f"Erreur classification: {e}")
             return "AUTRE", 0.0
+
+    def is_auto_eligible(self, category: str, confidence: float, order_context: Dict) -> Tuple[bool, str]:
+        """
+        Détermine si un email peut être répondu automatiquement
+
+        Returns:
+            Tuple (peut_auto, raison)
+        """
+        cat_config = CATEGORIES.get(category, {})
+
+        # Vérifie si la catégorie permet l'auto
+        if cat_config.get('type') != 'AUTO':
+            return False, f"Catégorie {category} nécessite validation manuelle"
+
+        # Vérifie la confiance minimum
+        if confidence < 0.85:
+            return False, f"Confiance insuffisante ({confidence:.0%})"
+
+        # Pour SUIVI, on a besoin du tracking
+        if category == 'SUIVI':
+            has_tracking = (
+                order_context.get('parcelpanel_tracking') or
+                (order_context.get('order') and order_context['order'].get('tracking_number'))
+            )
+            if not has_tracking:
+                return False, "Pas d'info de tracking disponible"
+
+        return True, f"Auto-réponse possible pour {category}"
 
     def generate_response(self, email_data: Dict, order_context: Dict,
                           category: str, language: str = None) -> str:
