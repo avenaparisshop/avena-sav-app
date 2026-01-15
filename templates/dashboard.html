@@ -421,8 +421,8 @@
             return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
         }
 
-        // Nettoyer le corps d'un email (supprime citations, signatures, historique)
-        function cleanEmailBody(body) {
+        // Nettoyer le corps d'un email (supprime citations et historique, garde le message principal)
+        function cleanEmailBody(body, isSentByUs = false) {
             if (!body) return '';
 
             let lines = body.split('\n');
@@ -433,8 +433,8 @@
                 let trimmedLine = line.trim();
 
                 // Détecte le début d'une citation / historique - STOP immédiatement
-                if (trimmedLine.match(/^-{3,}/) ||           // Ligne de tirets -------
-                    trimmedLine.match(/^_{3,}/) ||           // Ligne de underscores ____
+                if (trimmedLine.match(/^-{4,}/) ||           // Ligne de tirets ---- (4+ pour éviter faux positifs)
+                    trimmedLine.match(/^_{4,}/) ||           // Ligne de underscores ____
                     trimmedLine.match(/^De\s*:\s*.+@/i) ||   // De: quelqu'un@email.com
                     trimmedLine.match(/^From\s*:\s*.+@/i) || // From: someone@email.com
                     trimmedLine.match(/^Envoyé\s*:/i) ||     // Envoyé: date
@@ -446,7 +446,7 @@
                     trimmedLine.match(/^Date\s*:/i) ||       // Date:
                     trimmedLine.match(/a écrit\s*:?\s*$/i) || // ... a écrit:
                     trimmedLine.match(/wrote\s*:?\s*$/i) ||   // ... wrote:
-                    trimmedLine.match(/^Le\s+\d+.*a écrit/i) || // Le 18 août ... a écrit
+                    trimmedLine.match(/^Le\s+\d+.*202\d.*a écrit/i) || // Le 18 août 2025 ... a écrit
                     trimmedLine.match(/^On\s+.+wrote/i)) {   // On Mon, ... wrote
                     break; // Stop dès qu'on trouve une citation
                 }
@@ -454,13 +454,6 @@
                 // Ignore les lignes citées (commençant par >)
                 if (trimmedLine.startsWith('>')) {
                     continue;
-                }
-
-                // Détecte les signatures - stop aussi
-                if (trimmedLine.match(/^(Cordialement|Bien à vous|Cdlt|Best regards|Kind regards|Sent from my|Envoyé depuis mon)/i)) {
-                    // Ajoute la signature et stop
-                    cleanLines.push(line);
-                    break;
                 }
 
                 cleanLines.push(line);
@@ -476,7 +469,15 @@
                 cleanLines.shift();
             }
 
-            return cleanLines.join('\n').trim();
+            let result = cleanLines.join('\n').trim();
+
+            // Pour les messages envoyés par nous, enlève juste la signature finale si trop longue
+            if (isSentByUs && result.length > 100) {
+                // Enlève "Support AVENA Paris" ou similaire à la fin
+                result = result.replace(/\n*(Support\s+AVENA\s*(Paris)?|Belle\s+journée,?|L'équipe\s+AVENA)\s*$/i, '').trim();
+            }
+
+            return result;
         }
 
         // Toggle compact mode - ne recharge PAS les emails pour éviter le bug de disparition
@@ -538,7 +539,7 @@
                             <div class="flex flex-col space-y-3">
                                 ${convData.conversation.map(msg => {
                                     const isSent = msg.type === 'sent';
-                                    const cleanBody = cleanEmailBody(msg.body || '');
+                                    const cleanBody = cleanEmailBody(msg.body || '', isSent);
                                     // Skip les messages vides après nettoyage
                                     if (!cleanBody.trim()) return '';
                                     return `
