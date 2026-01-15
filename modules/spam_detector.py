@@ -673,6 +673,122 @@ WHITELIST_SUBJECTS = [
     r'delivery.*confirmed',
 ]
 
+# === PATTERNS OUTILS/SERVICES (emails de logiciels qu'on utilise) ===
+# Ces emails ne sont pas du spam mais des notifications de services utilisés
+# Ils doivent être catégorisés séparément (pas AUTO, pas MANUEL, pas SPAM)
+TOOLS_DOMAINS = [
+    # === ANALYTICS / TRACKING ===
+    r'@clarity\.ms$',
+    r'@microsoft\.com$',
+    r'@clarity\.microsoft\.com$',
+    r'clarity.*@.*microsoft',
+
+    # === MARKETPLACES ===
+    r'@tiktok\.com$',
+    r'@tiktokmail\.com$',
+    r'@tiktokshop\.com$',
+    r'@seller\.tiktok\.com$',
+    r'@alibaba\.com$',
+    r'@aliexpress\.com$',
+    r'@1688\.com$',
+    r'@cainiao\.com$',
+    r'@alimail\.com$',
+    r'@taobao\.com$',
+
+    # === E-COMMERCE PLATFORMS ===
+    r'@shopify\.com$',
+    r'@shopifymail\.com$',
+    r'@shop\.app$',
+    r'@woocommerce\.com$',
+    r'@bigcommerce\.com$',
+    r'@prestashop\.com$',
+
+    # === PAYMENT ===
+    r'@stripe\.com$',
+    r'@paypal\.com$',
+    r'@paypal\.fr$',
+    r'@mollie\.com$',
+    r'@alma\.eu$',
+    r'@klarna\.com$',
+
+    # === EMAIL / MARKETING ===
+    r'@klaviyo\.com$',
+    r'@klaviyomail\.com$',
+    r'@mailchimp\.com$',
+    r'@sendinblue\.com$',
+    r'@brevo\.com$',
+    r'@hubspot\.com$',
+    r'@mailgun\.com$',
+    r'@sendgrid\.com$',
+    r'@omnisend\.com$',
+
+    # === SHIPPING ===
+    r'@colissimo\.fr$',
+    r'@laposte\.fr$',
+    r'@chronopost\.fr$',
+    r'@mondialrelay\.fr$',
+    r'@dhl\.com$',
+    r'@ups\.com$',
+    r'@fedex\.com$',
+    r'@parcelpanel\.com$',
+    r'@aftership\.com$',
+    r'@17track\.net$',
+    r'@cainiao\.com$',
+
+    # === SOCIAL MEDIA (notifications officielles) ===
+    r'@facebookmail\.com$',
+    r'@instagram\.com$',
+    r'@pinterest\.com$',
+    r'@twitter\.com$',
+    r'@x\.com$',
+    r'@youtube\.com$',
+
+    # === CLOUD / HOSTING ===
+    r'@railway\.app$',
+    r'@vercel\.com$',
+    r'@netlify\.com$',
+    r'@heroku\.com$',
+    r'@aws\.amazon\.com$',
+    r'@digitalocean\.com$',
+
+    # === TOOLS / SAAS ===
+    r'@zoho\.com$',
+    r'@zohomail\.com$',
+    r'@notion\.so$',
+    r'@slack\.com$',
+    r'@trello\.com$',
+    r'@asana\.com$',
+    r'@canva\.com$',
+    r'@figma\.com$',
+    r'@github\.com$',
+    r'@gitlab\.com$',
+    r'@atlassian\.com$',
+    r'@jira\.com$',
+
+    # === GOOGLE ===
+    r'@google\.com$',
+    r'@googlemail\.com$',
+    r'@accounts\.google\.com$',
+]
+
+# Patterns pour détecter les emails d'outils dans le sujet ou le nom
+TOOLS_PATTERNS = [
+    r'microsoft\s*clarity',
+    r'welcome\s*to\s*clarity',
+    r'tiktok\s*shop',
+    r'tiktok\s*seller',
+    r'alibaba\s*notification',
+    r'aliexpress\s*notification',
+    r'cainiao\s*service',
+    r'expédition\s*intelligente',  # TikTok Shop FR
+    r'notification\s*shopify',
+    r'your\s*shopify\s*store',
+    r'klaviyo\s*notification',
+    r'stripe\s*notification',
+    r'paypal\s*notification',
+]
+
+
 # === PATTERNS DE VRAIS CLIENTS ===
 # Ces phrases indiquent que quelqu'un parle de SA PROPRE commande = client légitime
 CLIENT_PATTERNS = [
@@ -744,6 +860,36 @@ CLIENT_PATTERNS = [
     r'changer\s*l\'adresse',             # changer l'adresse de livraison
     r'change\s*the\s*address',           # change the address
 ]
+
+
+def is_tools_email(sender_email: str, sender_name: str, subject: str) -> Tuple[bool, str]:
+    """
+    Détecte si l'email provient d'un outil/service utilisé (Clarity, TikTok, etc.)
+
+    Ces emails ne sont pas du spam mais des notifications de services.
+    Ils doivent être catégorisés séparément (OUTILS).
+
+    Returns:
+        Tuple (is_tools, tool_name)
+    """
+    sender_lower = sender_email.lower() if sender_email else ''
+    name_lower = sender_name.lower() if sender_name else ''
+    subject_lower = subject.lower() if subject else ''
+
+    # Vérifie si le domaine est un domaine d'outil connu
+    for pattern in TOOLS_DOMAINS:
+        if re.search(pattern, sender_lower, re.IGNORECASE):
+            # Extrait le nom de l'outil du domaine
+            tool_name = sender_lower.split('@')[-1].split('.')[0] if '@' in sender_lower else 'tool'
+            return True, tool_name
+
+    # Vérifie les patterns dans le sujet ou le nom
+    full_text = f"{name_lower} {subject_lower}"
+    for pattern in TOOLS_PATTERNS:
+        if re.search(pattern, full_text, re.IGNORECASE):
+            return True, pattern.split('\\s*')[0].replace('\\', '')
+
+    return False, ""
 
 
 def is_fake_brand_email(sender_email: str, subject: str, sender_name: str, body: str = "") -> Tuple[bool, str]:
@@ -843,6 +989,7 @@ def detect_spam(sender_email: str, sender_name: str, subject: str, body: str) ->
     Détecte si un email est du spam
 
     LOGIQUE IMPORTANTE:
+    - Si c'est un email d'outil/service = pas spam (catégorie OUTILS)
     - Si quelqu'un pose des questions sur SA commande = vrai client (jamais spam)
     - Si quelqu'un propose d'apporter des commandes/ventes = démarcheur/spam
     - Si l'email prétend être Shopify/Meta/Facebook mais domaine non officiel = SPAM CRITIQUE
@@ -850,7 +997,13 @@ def detect_spam(sender_email: str, sender_name: str, subject: str, body: str) ->
     Returns:
         Tuple (is_spam, confidence, reason)
     """
-    # D'abord vérifier la whitelist
+    # D'abord vérifier si c'est un email d'outil/service
+    is_tool, tool_name = is_tools_email(sender_email, sender_name, subject)
+    if is_tool:
+        logger.info(f"EMAIL OUTILS détecté: {sender_email} - {subject[:50]}... | Outil: {tool_name}")
+        return False, 0.0, f"tools:{tool_name}"
+
+    # Ensuite vérifier la whitelist
     if is_whitelisted(sender_email, subject):
         return False, 0.0, "whitelisted"
 

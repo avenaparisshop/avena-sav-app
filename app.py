@@ -503,7 +503,7 @@ def update_email_category(email_id):
     new_category = data['category'].upper()
 
     # Valide la catégorie
-    valid_categories = ['AUTO', 'MANUEL', 'SPAM']
+    valid_categories = ['AUTO', 'MANUEL', 'SPAM', 'OUTILS']
     if new_category not in valid_categories:
         return jsonify({
             'success': False,
@@ -631,12 +631,18 @@ def fetch_new_emails():
                 email_data.get('body', '')
             )
 
-            # Definit la categorie selon le spam
+            # Definit la categorie selon le spam ou outils
             if is_spam:
                 category = 'SPAM'
                 confidence = spam_score
                 status = 'ignored'
                 spam_count += 1
+            elif spam_reason.startswith('tools:'):
+                # Email d'un outil/service (Clarity, TikTok, etc.)
+                category = 'OUTILS'
+                confidence = 1.0
+                status = 'ignored'  # Pas besoin de répondre aux outils
+                logger.info(f"Email OUTILS detecte: {email_data.get('sender_email')} - {spam_reason}")
             else:
                 # PAS de classification IA ici - on met en attente
                 category = 'PENDING'  # Sera classifie apres
@@ -1203,6 +1209,7 @@ def enrich_emails_customer_info():
 
     Pour chaque email sans numéro de commande, vérifie si l'expéditeur
     est un client existant et ajoute le numéro de commande.
+    Cherche d'abord dans la boutique de la langue détectée, puis dans toutes les autres.
     """
     try:
         # Récupère les emails sans numéro de commande (non-spam)
@@ -1220,6 +1227,11 @@ def enrich_emails_customer_info():
 
         ai = get_ai_responder()
         enriched_count = 0
+        shops_not_found = 0
+        search_failed = 0
+
+        # Liste de tous les shops
+        all_shops = ['tgir1c-x2', 'qk16wv-2e', 'jl1brs-gp', 'pz5e9e-2e', 'u06wln-hf', 'xptmak-r7', 'fyh99s-h9']
 
         # Mapping langue -> shop
         lang_to_shop = {
@@ -1238,22 +1250,34 @@ def enrich_emails_customer_info():
                 email_text = f"{email.subject or ''} {email.body or ''}"
                 language = ai.detect_language(email_text) if ai else 'fr'
 
+                # Ordre des shops à essayer: d'abord celui de la langue, puis les autres
                 target_shop = lang_to_shop.get(language, 'tgir1c-x2')
-                shopify = get_shopify_handler(target_shop)
+                shops_to_try = [target_shop] + [s for s in all_shops if s != target_shop]
 
-                if not shopify:
-                    continue
+                found = False
+                for shop_name in shops_to_try:
+                    shopify = get_shopify_handler(shop_name)
 
-                # Recherche le client
-                result = shopify.find_customer_orders(
-                    email=email.sender_email,
-                    name=email.sender_name
-                )
+                    if not shopify:
+                        shops_not_found += 1
+                        continue
 
-                if result['found'] and result['last_order_number']:
-                    email.order_number = result['last_order_number']
-                    enriched_count += 1
-                    logger.info(f"Email {email.id} enrichi: commande #{result['last_order_number']} (via {result['search_method']})")
+                    # Recherche le client
+                    result = shopify.find_customer_orders(
+                        email=email.sender_email,
+                        name=email.sender_name
+                    )
+
+                    if result['found'] and result['last_order_number']:
+                        email.order_number = result['last_order_number']
+                        enriched_count += 1
+                        found = True
+                        logger.info(f"Email {email.id} ({email.sender_name}) enrichi: commande #{result['last_order_number']} (shop: {shop_name}, via {result['search_method']})")
+                        break
+
+                if not found:
+                    search_failed += 1
+                    logger.debug(f"Client non trouvé pour email {email.id}: {email.sender_name} <{email.sender_email}>")
 
             except Exception as e:
                 logger.error(f"Erreur enrichissement email {email.id}: {e}")
@@ -1265,7 +1289,8 @@ def enrich_emails_customer_info():
             'success': True,
             'message': f'{enriched_count} emails enrichis avec numéro de commande',
             'enriched': enriched_count,
-            'total_checked': len(emails)
+            'total_checked': len(emails),
+            'not_found': search_failed
         })
 
     except Exception as e:
