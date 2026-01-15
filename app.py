@@ -495,15 +495,25 @@ def fetch_new_emails():
     try:
         handler = get_email_handler()
 
+        # Verifie la connexion IMAP
+        if not handler.connect_imap():
+            logger.error("Impossible de se connecter au serveur IMAP")
+            return jsonify({
+                'success': False,
+                'message': 'Erreur connexion IMAP - verifiez les identifiants Zoho'
+            }), 500
+
         # Import du detecteur de spam
         from modules.spam_detector import detect_spam
 
         # Recupere les emails de TOUS les dossiers importants
-        # Limite a 500 emails par dossier pour eviter les timeouts IMAP
+        # Limite a 100 emails par dossier pour eviter les timeouts
+        logger.info("Debut recuperation emails depuis IMAP...")
         new_emails = handler.fetch_emails_from_folders(
-            folders=["INBOX", "Archive", "Archiver", "Newsletter", "Notification"],
-            limit_per_folder=500
+            folders=["INBOX"],
+            limit_per_folder=100
         )
+        logger.info(f"Emails recuperes: {len(new_emails)}")
 
         processed = 0
         spam_count = 0
@@ -560,10 +570,12 @@ def fetch_new_emails():
         })
 
     except Exception as e:
+        import traceback
         logger.error(f"Erreur fetch emails: {e}")
+        logger.error(traceback.format_exc())
         return jsonify({
             'success': False,
-            'message': str(e)
+            'message': f'Erreur: {str(e)}'
         }), 500
 
 @app.route('/api/emails/<int:email_id>/generate', methods=['POST'])
