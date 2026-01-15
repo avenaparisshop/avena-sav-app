@@ -229,8 +229,7 @@
                                 </div>
                                 <div class="text-xs text-gray-400 ml-4">
                                     ${formatDate(email.received_at)}
-                                </div>
-                            </div>
+                                  </div>
                         </div>
                     `).join('');
                 }
@@ -288,16 +287,27 @@
                 <div class="p-4 border-b">
                     <div class="flex items-center justify-between mb-2">
                         <h4 class="font-medium text-gray-700">
-                            <i class="fas fa-robot mr-2"></i>Réponse générée
+                            <i class="fas fa-robot mr-2"></i>Réponse IA
                         </h4>
+                        ${email.generated_response ? `
                         <button onclick="regenerateResponse(${email.id})" class="text-sm text-blue-500 hover:text-blue-700">
                             <i class="fas fa-redo mr-1"></i>Régénérer
                         </button>
+                        ` : ''}
                     </div>
-                    <div class="response-preview text-sm bg-green-50 p-3 rounded whitespace-pre-wrap">${escapeHtml(email.generated_response || 'Aucune réponse générée')}</div>
+                    ${email.generated_response ? `
+                    <div class="response-preview text-sm bg-green-50 p-3 rounded whitespace-pre-wrap">${escapeHtml(email.generated_response)}</div>
+                    ` : `
+                    <div class="text-center py-6">
+                        <p class="text-gray-400 mb-4">Aucune réponse générée</p>
+                        <button onclick="generateResponse(${email.id})" id="generateBtn-${email.id}" class="bg-purple-500 hover:bg-purple-600 text-white px-6 py-3 rounded-lg">
+                            <i class="fas fa-magic mr-2"></i>Générer une réponse IA
+                        </button>
+                    </div>
+                    `}
                 </div>
 
-                ${email.status === 'pending' ? `
+                ${email.status === 'pending' && email.generated_response ? `
                 <div class="p-4 flex space-x-3">
                     <button onclick="approveEmail(${email.id})" class="flex-1 bg-green-500 hover:bg-green-600 text-white py-2 rounded-lg">
                         <i class="fas fa-check mr-2"></i>Approuver & Envoyer
@@ -307,6 +317,12 @@
                     </button>
                     <button onclick="ignoreEmail(${email.id})" class="px-4 py-2 border border-gray-300 hover:bg-gray-50 rounded-lg">
                         <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                ` : email.status === 'pending' && !email.generated_response ? `
+                <div class="p-4 flex justify-center">
+                    <button onclick="ignoreEmail(${email.id})" class="px-6 py-2 border border-gray-300 hover:bg-gray-50 rounded-lg text-gray-600">
+                        <i class="fas fa-times mr-2"></i>Ignorer cet email
                     </button>
                 </div>
                 ` : `
@@ -380,6 +396,40 @@
                 }
             } catch (e) {
                 showToast('Erreur', 'error');
+            }
+        }
+
+        // Générer une réponse IA (appelé manuellement)
+        async function generateResponse(emailId) {
+            const btn = document.getElementById(`generateBtn-${emailId}`);
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Génération en cours...';
+            }
+
+            try {
+                showToast('Génération de la réponse IA...', 'info');
+                const res = await fetch(`/api/emails/${emailId}/generate`, { method: 'POST' });
+                const data = await res.json();
+
+                if (data.success) {
+                    showToast(`Réponse générée (${data.category || 'classifié'})`);
+                    // Reload email list and re-select
+                    await loadEmails();
+                    selectEmail(emailId);
+                } else {
+                    showToast(data.message || 'Erreur', 'error');
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="fas fa-magic mr-2"></i>Générer une réponse IA';
+                    }
+                }
+            } catch (e) {
+                showToast('Erreur de connexion', 'error');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-magic mr-2"></i>Générer une réponse IA';
+                }
             }
         }
 
